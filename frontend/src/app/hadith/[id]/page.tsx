@@ -6,7 +6,7 @@ import dynamic from "next/dynamic";
 import { motion } from "framer-motion";
 import { getHadith, getHadithGraph } from "@/lib/api";
 import { Navbar } from "@/components/ui";
-import { ChainFlow } from "@/components/graph";
+import { IsnadChain } from "@/components/graph";
 import type { HadithDetail, GraphData } from "@/lib/types";
 import Link from "next/link";
 
@@ -168,7 +168,7 @@ export default function HadithPage() {
               </div>
 
               {viewMode === "chain" ? (
-                <ChainFlow chain={hadith.chain} />
+                <IsnadChain chain={hadith.chain} />
               ) : (
                 <div className="h-96">
                   {graphData && (
