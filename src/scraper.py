@@ -4,7 +4,45 @@ import requests
 from bs4 import BeautifulSoup
 import json
 import time
+import re
 from typing import Dict, Optional
+
+
+def extract_years_from_fame(fame: str | None) -> tuple[str, int | None, int | None]:
+    """
+    Extract cleaned fame, birth year, and death year from fame string.
+
+    Returns:
+        tuple: (cleaned_fame, birth_year, death_year)
+    """
+    if not fame:
+        return "", None, None
+
+    # Remove excessive whitespace (multiple spaces)
+    cleaned = re.sub(r"\s+", " ", fame.strip())
+
+    # Extract birth year: / ولد في :XX
+    birth_year = None
+    birth_match = re.search(r"/\s*ولد في\s*:(\d+)", cleaned)
+    if birth_match:
+        birth_year = int(birth_match.group(1))
+        # Remove the birth year part from cleaned fame
+        cleaned = re.sub(r"/\s*ولد في\s*:\d+", "", cleaned)
+
+    # Extract death year: / توفي في :XX
+    death_year = None
+    death_match = re.search(r"/\s*توفي في\s*:(\d+)", cleaned)
+    if death_match:
+        death_year = int(death_match.group(1))
+        # Remove the death year part from cleaned fame
+        cleaned = re.sub(r"/\s*توفي في\s*:\d+", "", cleaned)
+
+    # Final cleanup - remove extra whitespace again
+    cleaned = re.sub(r"\s+", " ", cleaned.strip())
+    # Remove trailing slashes
+    cleaned = cleaned.rstrip("/ ").strip()
+
+    return cleaned, birth_year, death_year
 
 
 def scrape_hadith(hadith_num: int) -> Optional[Dict]:
@@ -74,12 +112,18 @@ def scrape_hadith(hadith_num: int) -> Optional[Dict]:
                 name_cell = cols[0]
                 link = name_cell.find("a")
 
+                # Extract and clean fame field
+                raw_fame = cols[1].text.strip()
+                cleaned_fame, birth_year, death_year = extract_years_from_fame(raw_fame)
+
                 narrator_details.append(
                     {
                         "name": link.text.strip() if link else "",
                         "id": link.get("data-id") if link else "",
-                        "fame": cols[1].text.strip(),
+                        "fame": cleaned_fame,
                         "rank": cols[2].text.strip(),
+                        "birth_year": birth_year,
+                        "death_year": death_year,
                     }
                 )
 

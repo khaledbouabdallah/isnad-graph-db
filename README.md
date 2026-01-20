@@ -20,7 +20,7 @@ Build a graph database of Sahih Bukhari hadith collection to visualize and analy
   - `full_text` (complete text with chain)
 
 **Edges:**
-- **NARRATED_FROM** (person → person) 
+- **NARRATED_FROM** (person → person)
   - `hadith`: hadith_number (tracks which hadith uses this transmission link)
 - **HAS_CHAIN** (hadith → person)
   - Links hadith to first narrator in its chain
@@ -156,18 +156,16 @@ LIMIT 5
 ```
 
 ## Current Status
-- ✅ Web scraper with narrator ID extraction
-- ✅ Book/chapter metadata extraction
+- ✅ narrator & hadith Web scraper
 - ✅ Neo4j loader with complete narrator network
 - ✅ Full Sahih Bukhari dataset (7,031 hadiths)
-- 🔄 Analysis queries and visualization
-- 📋 Web interface for queries (planned)
+- ✅ Analysis queries and visualization
+- ✅ Web interface for queries (planned)
 
 ## Future Enhancements
 - Add SON_OF edges if genealogical data becomes available
 - More collections (Muslim, Abu Dawud, etc.)
 - Advanced graph analytics (centrality metrics, community detection)
-- Interactive web interface with FastAPI backend
 - Narration method tagging (حدثنا vs أخبرنا vs عن)
 
 ## Data Source

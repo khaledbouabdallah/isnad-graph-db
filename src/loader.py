@@ -41,12 +41,16 @@ def load_to_neo4j(
                     SET n.name = $name,
                         n.fame = $fame,
                         n.rank = $rank,
+                        n.birth_year = $birth_year,
+                        n.death_year = $death_year,
                         n.is_narrator = true
                     """,
                     id=narrator["id"],
                     name=narrator["name"],
                     fame=narrator["fame"],
                     rank=narrator["rank"],
+                    birth_year=narrator.get("birth_year"),
+                    death_year=narrator.get("death_year"),
                 )
 
         print("Creating hadiths and chains...")

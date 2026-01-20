@@ -67,6 +67,8 @@ async def get_narrator(narrator_id: str):
                n.name as name,
                n.rank as rank,
                n.fame as fame,
+               n.birth_year as birth_year,
+               n.death_year as death_year,
                out_count + in_count as total_connections
     """
     info = await db.execute_single(info_query, id=narrator_id)
@@ -80,7 +82,10 @@ async def get_narrator(narrator_id: str):
         WITH teacher, COUNT(DISTINCT r.hadith) as hadith_count
         RETURN teacher.id as id,
                teacher.name as name,
+               teacher.fame as fame,
                teacher.rank as rank,
+               teacher.birth_year as birth_year,
+               teacher.death_year as death_year,
                hadith_count
         ORDER BY hadith_count DESC
         LIMIT 20
@@ -93,7 +98,10 @@ async def get_narrator(narrator_id: str):
         WITH student, COUNT(DISTINCT r.hadith) as hadith_count
         RETURN student.id as id,
                student.name as name,
+               student.fame as fame,
                student.rank as rank,
+               student.birth_year as birth_year,
+               student.death_year as death_year,
                hadith_count
         ORDER BY hadith_count DESC
         LIMIT 20
@@ -119,6 +127,8 @@ async def get_narrator(narrator_id: str):
         name=info["name"],
         rank=info["rank"],
         fame=info["fame"],
+        birth_year=info.get("birth_year"),
+        death_year=info.get("death_year"),
         total_connections=info["total_connections"],
         teachers=[NarratorConnection(**t) for t in teachers],
         students=[NarratorConnection(**s) for s in students],

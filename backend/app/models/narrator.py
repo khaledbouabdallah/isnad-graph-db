@@ -8,6 +8,8 @@ class Narrator(BaseModel):
     name: str | None
     rank: str | None = None
     fame: str | None = None
+    birth_year: int | None = None
+    death_year: int | None = None
     hadith_count: int | None = None
 
 
@@ -16,7 +18,10 @@ class NarratorConnection(BaseModel):
 
     id: str
     name: str | None
+    fame: str | None
     rank: str | None = None
+    birth_year: int | None = None
+    death_year: int | None = None
     hadith_count: int  # Number of hadiths in this connection
 
 
@@ -27,6 +32,8 @@ class NarratorDetail(BaseModel):
     name: str | None
     rank: str | None
     fame: str | None
+    birth_year: int | None = None
+    death_year: int | None = None
     total_connections: int
     teachers: list[NarratorConnection]  # Narrators they heard from
     students: list[NarratorConnection]  # Narrators who heard from them

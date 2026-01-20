@@ -4,13 +4,14 @@ from app.models import GraphNode, GraphEdge, GraphData
 
 router = APIRouter()
 
-# Color mapping for narrator ranks
+# Color mapping for narrator ranks - matches frontend graph-config.ts
+# Warm earth-tone palette (gold, amber, copper, bronze)
 RANK_COLORS = {
-    "صحابي": "#F59E0B",  # Amber - Companions
-    "ثقة": "#14B8A6",  # Teal - Trustworthy
-    "ثقة ثبت": "#10B981",  # Emerald - Very trustworthy
-    "ثقة حافظ": "#06B6D4",  # Cyan - Trustworthy memorizer
-    "default": "#6366F1",  # Indigo - Default
+    "صحابي": "#F59E0B",  # Warm Gold - Companions
+    "ثقة ثبت": "#D97706",  # Deep Amber - Very trustworthy (check before ثقة)
+    "ثقة": "#B45309",  # Copper - Trustworthy
+    "حافظ": "#92400E",  # Bronze - Memorizer
+    "default": "#A78BFA",  # Soft Violet - Default/Unknown
 }
 
 
@@ -18,15 +19,21 @@ def get_node_color(rank: str | None) -> str:
     """Get color based on narrator rank."""
     if not rank:
         return RANK_COLORS["default"]
-    for key, color in RANK_COLORS.items():
-        if key in rank:
-            return color
+    # Check in order of specificity (ثقة ثبت before ثقة)
+    if "صحابي" in rank:
+        return RANK_COLORS["صحابي"]
+    if "ثقة ثبت" in rank:
+        return RANK_COLORS["ثقة ثبت"]
+    if "ثقة" in rank:
+        return RANK_COLORS["ثقة"]
+    if "حافظ" in rank:
+        return RANK_COLORS["حافظ"]
     return RANK_COLORS["default"]
 
 
 @router.get("/overview", response_model=GraphData)
 async def get_graph_overview(
-    limit: int = Query(500, ge=50, le=1000),
+    limit: int = Query(500, ge=50, le=2000),
 ):
     """Get top narrators and their connections for the main explorer view."""
 
@@ -40,7 +47,7 @@ async def get_graph_overview(
         WITH n, out_count + in_count as total
         WHERE total > 5
         RETURN n.id as id,
-               n.name as label,
+               n.fame as label,
                n.rank as rank,
                total as connections
         ORDER BY total DESC
@@ -104,7 +111,7 @@ async def get_narrator_graph(
             OPTIONAL MATCH ()-[r2:NARRATED_FROM]->(n)
             WITH n, out_count, COUNT(DISTINCT r2) as in_count
             RETURN n.id as id,
-                   n.name as label,
+                   n.fame as label,
                    n.rank as rank,
                    out_count + in_count as connections
         """
@@ -120,7 +127,7 @@ async def get_narrator_graph(
             OPTIONAL MATCH ()-[r2:NARRATED_FROM]->(n)
             WITH n, out_count, COUNT(DISTINCT r2) as in_count
             RETURN n.id as id,
-                   n.name as label,
+                   n.fame as label,
                    n.rank as rank,
                    out_count + in_count as connections
         """

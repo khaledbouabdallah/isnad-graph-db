@@ -50,7 +50,7 @@ async def get_stats():
         OPTIONAL MATCH ()-[r2:NARRATED_FROM]->(n)
         WITH n, out_count, COUNT(DISTINCT r2) as in_count
         WITH n, out_count + in_count as total
-        RETURN n.name as name, n.rank as rank, total as connections
+        RETURN n.name as name, n.fame as fame, n.rank as rank, total as connections
         ORDER BY total DESC
         LIMIT 5
     """
