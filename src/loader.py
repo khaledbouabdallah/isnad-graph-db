@@ -1,0 +1,134 @@
+"""Neo4j loader module for importing hadiths into graph database"""
+
+import json
+from neo4j import GraphDatabase
+from typing import List, Dict
+
+
+def load_to_neo4j(
+    hadiths_file: str = "data/Sahih_Al-Bukhari/bukhari_hadiths.json",
+    neo4j_uri: str = "bolt://localhost:7687",
+    neo4j_user: str = "neo4j",
+    neo4j_password: str = "password123",
+):
+    """Load scraped hadiths into Neo4j graph database
+
+    Creates:
+    - Person nodes for narrators with properties (id, name, fame, rank)
+    - Hadith nodes with properties (number, book, chapter, matn, full_text)
+    - NARRATED_FROM edges between narrators
+    - HAS_CHAIN edges from hadith to first narrator
+
+    Args:
+        hadiths_file: Path to JSON file with scraped hadiths
+        neo4j_uri: Neo4j connection URI
+        neo4j_user: Neo4j username
+        neo4j_password: Neo4j password
+    """
+    driver = GraphDatabase.driver(neo4j_uri, auth=(neo4j_user, neo4j_password))
+
+    with open(hadiths_file, "r", encoding="utf-8") as f:
+        hadiths = json.load(f)
+
+    with driver.session() as session:
+        # Create all narrator nodes from narrator_details
+        print("Creating narrator nodes...")
+        for hadith in hadiths:
+            for narrator in hadith["narrator_details"]:
+                session.run(
+                    """
+                    MERGE (n:Person {id: $id})
+                    SET n.name = $name,
+                        n.fame = $fame,
+                        n.rank = $rank,
+                        n.is_narrator = true
+                    """,
+                    id=narrator["id"],
+                    name=narrator["name"],
+                    fame=narrator["fame"],
+                    rank=narrator["rank"],
+                )
+
+        print("Creating hadiths and chains...")
+        for idx, hadith in enumerate(hadiths):
+            if idx % 100 == 0:
+                print(f"  Processed {idx}/{len(hadiths)}...")
+
+            # Create hadith node with book and chapter metadata
+            session.run(
+                """
+                MERGE (h:Hadith {number: $number})
+                SET h.book = $book,
+                    h.chapter = $chapter,
+                    h.matn = $matn,
+                    h.full_text = $full_text
+                """,
+                number=hadith["hadith_number"],
+                book=hadith.get("book", ""),
+                chapter=hadith.get("chapter", ""),
+                matn=hadith["matn"],
+                full_text=hadith["full_text"],
+            )
+
+            chain = hadith["chain"]
+
+            if not chain:
+                continue
+
+            # Create NARRATED_FROM edges between consecutive narrators
+            for i in range(len(chain) - 1):
+                narrator1_id = chain[i]["id"]
+                narrator2_id = chain[i + 1]["id"]
+
+                # Skip if same ID (prevent self-loop)
+                if narrator1_id == narrator2_id:
+                    continue
+
+                session.run(
+                    """
+                    MATCH (n1:Person {id: $id1})
+                    MATCH (n2:Person {id: $id2})
+                    MERGE (n1)-[:NARRATED_FROM {hadith: $hadith_num}]->(n2)
+                    """,
+                    id1=narrator1_id,
+                    id2=narrator2_id,
+                    hadith_num=hadith["hadith_number"],
+                )
+
+            # Link hadith to FIRST narrator in chain
+            session.run(
+                """
+                MATCH (h:Hadith {number: $hadith_num})
+                MATCH (n:Person {id: $narrator_id})
+                MERGE (h)-[:HAS_CHAIN]->(n)
+                """,
+                hadith_num=hadith["hadith_number"],
+                narrator_id=chain[0]["id"],
+            )
+
+    driver.close()
+    print(f"✅ Loaded {len(hadiths)} hadiths to Neo4j")
+
+
+def reset_database(
+    neo4j_uri: str = "bolt://localhost:7687",
+    neo4j_user: str = "neo4j",
+    neo4j_password: str = "password123",
+):
+    """Clear all nodes and relationships from Neo4j database
+
+    WARNING: This deletes everything in the database!
+
+    Args:
+        neo4j_uri: Neo4j connection URI
+        neo4j_user: Neo4j username
+        neo4j_password: Neo4j password
+    """
+    driver = GraphDatabase.driver(neo4j_uri, auth=(neo4j_user, neo4j_password))
+
+    print("⚠️  Clearing database...")
+    with driver.session() as session:
+        session.run("MATCH (n) DETACH DELETE n")
+
+    driver.close()
+    print("✅ Database cleared.")
