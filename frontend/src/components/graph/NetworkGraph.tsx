@@ -13,6 +13,58 @@ import {
   NODE_STYLES,
 } from "@/lib/graph-config";
 
+// Custom draw hover function - prominent label above the node
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function drawHover(context: CanvasRenderingContext2D, data: any, settings: any): void {
+  const size = data.size;
+  const x = data.x;
+  const y = data.y;
+
+  // Draw a glow ring around the node
+  context.beginPath();
+  context.arc(x, y, size + 4, 0, Math.PI * 2);
+  context.strokeStyle = data.color;
+  context.lineWidth = 3;
+  context.globalAlpha = 0.8;
+  context.stroke();
+  context.globalAlpha = 1;
+
+  // Draw label ABOVE the node with larger font and background
+  if (data.label) {
+    const fontSize = (settings.labelSize || 12) + 4; // Larger font for hovered
+    const font = settings.labelFont || "sans-serif";
+
+    context.font = `700 ${fontSize}px ${font}`;
+
+    const labelWidth = context.measureText(data.label).width;
+    const padding = 8;
+    const labelX = x - labelWidth / 2;
+    const labelY = y - size - 16; // Position above the node
+
+    // Semi-transparent dark background for readability
+    context.fillStyle = "rgba(0, 0, 0, 0.85)";
+    context.beginPath();
+    context.roundRect(
+      labelX - padding,
+      labelY - fontSize + 2,
+      labelWidth + padding * 2,
+      fontSize + padding,
+      6
+    );
+    context.fill();
+
+    // Border with node color
+    context.strokeStyle = data.color;
+    context.lineWidth = 1.5;
+    context.stroke();
+
+    // Draw the label text
+    context.fillStyle = "#fef3c7";
+    context.textAlign = "left";
+    context.fillText(data.label, labelX, labelY);
+  }
+}
+
 interface NetworkGraphProps {
   data: GraphData;
   onNodeClick?: (nodeId: string) => void;
@@ -24,7 +76,6 @@ export interface NetworkGraphRef {
   zoomIn: () => void;
   zoomOut: () => void;
   resetCamera: () => void;
-  toggleFullscreen: () => void;
 }
 
 const NetworkGraph = forwardRef<NetworkGraphRef, NetworkGraphProps>(
@@ -66,15 +117,6 @@ const NetworkGraph = forwardRef<NetworkGraphRef, NetworkGraphProps>(
         const camera = sigmaRef.current?.getCamera();
         if (camera) {
           camera.animatedReset({ duration: 300 });
-        }
-      },
-      toggleFullscreen: () => {
-        if (containerRef.current) {
-          if (document.fullscreenElement) {
-            document.exitFullscreen();
-          } else {
-            containerRef.current.requestFullscreen();
-          }
         }
       },
     }));
@@ -121,6 +163,8 @@ const NetworkGraph = forwardRef<NetworkGraphRef, NetworkGraphProps>(
       // Create sigma instance with curved edges and warm styling
       const sigma = new Sigma(graph, containerRef.current, {
         ...SIGMA_SETTINGS,
+        // Custom hover rendering - no white background box
+        defaultDrawNodeHover: drawHover,
         // Use curved edge program for stylish connections
         edgeProgramClasses: {
           curved: EdgeCurvedArrowProgram,

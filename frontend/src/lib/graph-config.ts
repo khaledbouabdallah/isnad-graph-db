@@ -9,7 +9,7 @@ export const RANK_COLORS = {
   thiqaThabt: "#D97706",  // Deep Amber - Very trustworthy (ثقة ثبت)
   thiqa: "#B45309",       // Copper - Trustworthy (ثقة)
   hafiz: "#92400E",       // Bronze - Memorizer (حافظ)
-  default: "#78716C",     // Warm Stone - Default/Unknown
+  default: "#A78BFA",     // Soft Violet - Default/Unknown (distinct from faded)
 } as const;
 
 // Edge styling - hidden by default, curved, shown on hover
@@ -22,7 +22,7 @@ export const EDGE_STYLES = {
 
 // Node styling
 export const NODE_STYLES = {
-  faded: "#78716C25",          // Semi-transparent warm stone (not white!)
+  faded: "#27272a15",          // Very faded dark grey (almost invisible)
   minSize: 8,
   maxSize: 40,
   glowMultiplier: 1.4,         // Size multiplier on hover
@@ -32,15 +32,16 @@ export const NODE_STYLES = {
 export const SIGMA_SETTINGS = {
   renderLabels: true,
   labelFont: "IBM Plex Sans Arabic, sans-serif",
-  labelSize: 12,
-  labelColor: { color: "#fef3c7" },  // Warm cream for labels
-  labelRenderedSizeThreshold: 8,
+  labelSize: 14,                    // Larger for better visibility
+  labelWeight: "600",               // Bolder
+  labelColor: { color: "#fef3c7" }, // Warm cream for labels
+  labelRenderedSizeThreshold: 6,    // Show labels for smaller nodes too
   defaultNodeColor: RANK_COLORS.default,
   defaultEdgeColor: EDGE_STYLES.default,
   edgeLabelFont: "IBM Plex Sans Arabic, sans-serif",
   edgeLabelSize: 10,
-  labelDensity: 0.5,
-  labelGridCellSize: 100,
+  labelDensity: 0.7,                // Show more labels
+  labelGridCellSize: 80,            // Smaller grid = more labels shown
   zIndex: true,
 } as const;
 

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useMemo, useRef } from "react";
+import { useEffect, useState, useMemo, useRef, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import dynamic from "next/dynamic";
 import { motion } from "framer-motion";
@@ -15,11 +15,13 @@ const NetworkGraph = dynamic(
   { ssr: false }
 );
 
-const MAX_NODES = 1000;
+// Load all narrators - backend limit is 2000
+const MAX_NODES = 2000;
 
 export default function ExplorePage() {
   const router = useRouter();
   const graphRef = useRef<NetworkGraphRef>(null);
+  const mainRef = useRef<HTMLElement>(null);
 
   // Full data loaded once
   const [fullData, setFullData] = useState<GraphData | null>(null);
@@ -29,6 +31,17 @@ export default function ExplorePage() {
   const [nodeCount, setNodeCount] = useState(500);
   const [selectedRank, setSelectedRank] = useState("all");
   const [showEdges, setShowEdges] = useState(false);
+
+  // Fullscreen handler - fullscreen the entire main section (includes toolbar)
+  const toggleFullscreen = useCallback(() => {
+    if (mainRef.current) {
+      if (document.fullscreenElement) {
+        document.exitFullscreen();
+      } else {
+        mainRef.current.requestFullscreen();
+      }
+    }
+  }, []);
 
   // Load full data once on mount
   useEffect(() => {
@@ -79,7 +92,7 @@ export default function ExplorePage() {
     <div className="min-h-screen bg-background">
       <Navbar />
 
-      <main className="pt-16 h-screen flex flex-col">
+      <main ref={mainRef} className="pt-16 h-screen flex flex-col bg-background">
         {/* Controls */}
         <GraphControls
           nodeCount={nodeCount}
@@ -92,7 +105,7 @@ export default function ExplorePage() {
           onZoomIn={() => graphRef.current?.zoomIn()}
           onZoomOut={() => graphRef.current?.zoomOut()}
           onResetCamera={() => graphRef.current?.resetCamera()}
-          onToggleFullscreen={() => graphRef.current?.toggleFullscreen()}
+          onToggleFullscreen={toggleFullscreen}
           visibleNodes={filteredData?.nodes.length || 0}
           visibleEdges={filteredData?.edges.length || 0}
         />
