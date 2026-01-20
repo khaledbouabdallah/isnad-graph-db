@@ -1,0 +1,82 @@
+@import "tailwindcss";
+
+/* Dark theme colors */
+:root {
+  --background: #0a0a0a;
+  --foreground: #ededed;
+  --card: #141414;
+  --card-foreground: #ededed;
+  --primary: #14B8A6;
+  --primary-foreground: #0a0a0a;
+  --secondary: #1f1f1f;
+  --secondary-foreground: #ededed;
+  --muted: #262626;
+  --muted-foreground: #a3a3a3;
+  --accent: #6366F1;
+  --accent-foreground: #ededed;
+  --border: #262626;
+  --ring: #14B8A6;
+
+  /* Narrator rank colors */
+  --sahabi: #F59E0B;    /* صحابي - Amber */
+  --thiqa: #14B8A6;     /* ثقة - Teal */
+  --thiqa-thabt: #10B981; /* ثقة ثبت - Emerald */
+  --hafiz: #06B6D4;     /* حافظ - Cyan */
+  --default-rank: #6366F1; /* Default - Indigo */
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-border: var(--border);
+  --color-ring: var(--ring);
+  --font-arabic: var(--font-arabic);
+}
+
+body {
+  background: var(--background);
+  color: var(--foreground);
+  font-family: var(--font-arabic), system-ui, sans-serif;
+}
+
+/* Scrollbar styling */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: var(--secondary);
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--muted);
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: var(--muted-foreground);
+}
+
+/* Graph container */
+.sigma-container {
+  width: 100%;
+  height: 100%;
+  background: var(--background);
+}
+
+/* Selection styles */
+::selection {
+  background: var(--primary);
+  color: var(--primary-foreground);
+}
