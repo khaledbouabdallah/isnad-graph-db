@@ -115,7 +115,7 @@ export default function SearchBar() {
                     onClick={() => handleSelect("narrator", narrator.id)}
                     className="w-full px-4 py-3 text-right hover:bg-secondary transition-colors flex items-center justify-between"
                   >
-                    <span>{narrator.name}</span>
+                    <span>{narrator.fame}</span>
                     <span className="text-sm text-muted-foreground">
                       {narrator.rank}
                     </span>

@@ -31,11 +31,16 @@ export default function NarratorCard({ narrator, index = 0 }: NarratorCardProps)
           {/* Info */}
           <div className="flex-1 min-w-0">
             <h3 className="font-semibold truncate group-hover:text-primary transition-colors">
-              {narrator.name || "غير معروف"}
+              {narrator.fame || "غير معروف"}
             </h3>
             <p className="text-sm text-muted-foreground truncate">
               {narrator.rank || "غير محدد"}
             </p>
+            {narrator.death_year && (
+              <p className="text-xs text-muted-foreground">
+                توفي: {narrator.death_year} هـ
+              </p>
+            )}
           </div>
 
           {/* Connection count */}

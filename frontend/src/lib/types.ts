@@ -28,13 +28,18 @@ export interface Narrator {
   name: string | null;
   rank: string | null;
   fame: string | null;
+  birth_year: number | null;
+  death_year: number | null;
   hadith_count: number | null;
 }
 
 export interface NarratorConnection {
   id: string;
   name: string | null;
+  fame: string | null;
   rank: string | null;
+  birth_year: number | null;
+  death_year: number | null;
   hadith_count: number;
 }
 
@@ -43,6 +48,8 @@ export interface NarratorDetail {
   name: string | null;
   rank: string | null;
   fame: string | null;
+  birth_year: number | null;
+  death_year: number | null;
   total_connections: number;
   teachers: NarratorConnection[];
   students: NarratorConnection[];
@@ -72,6 +79,7 @@ export interface GraphData {
 // Stats types
 export interface TopNarrator {
   name: string;
+  fame: string;
   rank: string;
   connections: number;
 }

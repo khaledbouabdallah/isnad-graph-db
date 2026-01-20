@@ -98,6 +98,7 @@ export default function EgoGraph({
             res.label = "";
           }
         }
+        // When not hovering, keep default labels visible
         return res;
       },
       edgeReducer: (edge, edgeData) => {

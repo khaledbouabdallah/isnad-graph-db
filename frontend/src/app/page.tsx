@@ -172,7 +172,7 @@ export default function HomePage() {
                       {index + 1}
                     </div>
                     <div className="flex-1">
-                      <h3 className="font-semibold">{narrator.name}</h3>
+                      <h3 className="font-semibold">{narrator.fame}</h3>
                       <p className="text-sm text-muted-foreground">
                         {narrator.connections} اتصال
                       </p>

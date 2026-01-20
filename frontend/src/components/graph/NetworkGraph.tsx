@@ -165,6 +165,57 @@ const NetworkGraph = forwardRef<NetworkGraphRef, NetworkGraphProps>(
         ...SIGMA_SETTINGS,
         // Custom hover rendering - no white background box
         defaultDrawNodeHover: drawHover,
+        // Don't render default label for hovered nodes
+        defaultDrawNodeLabel: (context, data, settings) => {
+          // Skip label rendering for hovered node (drawHover handles it)
+          if (data.isHovered) {
+            return;
+          }
+          // Default label rendering for other nodes
+          if (!data.label) return;
+
+          const size = data.size;
+
+          // If this is a highlighted neighbor, draw prominent label
+          if (data.highlighted) {
+            const fontSize = (settings.labelSize || 12) + 2;
+            const font = settings.labelFont || "sans-serif";
+
+            context.font = `600 ${fontSize}px ${font}`;
+
+            const labelWidth = context.measureText(data.label).width;
+            const padding = 6;
+            const labelX = data.x + size + 8;
+            const labelY = data.y;
+
+            // Semi-transparent dark background
+            context.fillStyle = "rgba(0, 0, 0, 0.75)";
+            context.beginPath();
+            context.roundRect(
+              labelX - padding,
+              labelY - fontSize / 2 - padding / 2,
+              labelWidth + padding * 2,
+              fontSize + padding,
+              4
+            );
+            context.fill();
+
+            // Border with node color
+            context.strokeStyle = data.color;
+            context.lineWidth = 1;
+            context.stroke();
+
+            // Draw the label text
+            context.fillStyle = "#fef3c7";
+            context.textAlign = "left";
+            context.fillText(data.label, labelX, labelY + fontSize / 3);
+          } else {
+            // Regular label for non-highlighted nodes
+            context.fillStyle = settings.labelColor?.color || "#fef3c7";
+            context.font = `${settings.labelWeight} ${settings.labelSize}px ${settings.labelFont}`;
+            context.fillText(data.label, data.x + size + 3, data.y + settings.labelSize / 3);
+          }
+        },
         // Use curved edge program for stylish connections
         edgeProgramClasses: {
           curved: EdgeCurvedArrowProgram,
@@ -176,21 +227,23 @@ const NetworkGraph = forwardRef<NetworkGraphRef, NetworkGraphProps>(
 
           if (hovered) {
             if (node === hovered) {
-              // Hovered node - make it glow (larger), show label
+              // Hovered node - make it glow (larger), keep label for drawHover
               res.highlighted = true;
               res.size = (res.size as number) * NODE_STYLES.glowMultiplier;
               res.zIndex = 2;
+              res.isHovered = true; // Mark as hovered for label renderer
             } else if (graph.areNeighbors(node, hovered)) {
               // Neighbors - keep original color, show label
               res.highlighted = true;
               res.zIndex = 1;
             } else {
-              // Non-connected nodes - fade to transparent warm grey
+              // Non-connected nodes - fade to transparent warm grey, hide label
               res.color = NODE_STYLES.faded;
               res.label = "";
               res.zIndex = 0;
             }
           }
+          // When not hovering, keep default labels visible
           return res;
         },
         edgeReducer: (edge, edgeData) => {

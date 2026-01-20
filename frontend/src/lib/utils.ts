@@ -29,8 +29,8 @@ export function truncate(text: string | null, length: number): string {
 }
 
 /**
- * Format large numbers with Arabic locale
+ * Format large numbers with Western Arabic numerals
  */
 export function formatNumber(num: number): string {
-  return num.toLocaleString("ar-EG");
+  return num.toLocaleString("en-US");
 }

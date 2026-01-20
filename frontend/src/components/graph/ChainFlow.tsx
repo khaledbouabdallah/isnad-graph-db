@@ -42,7 +42,7 @@ export default function ChainFlow({ chain, className = "" }: ChainFlowProps) {
             {/* Narrator info */}
             <div className="flex-1">
               <h4 className="font-semibold group-hover:text-primary transition-colors">
-                {narrator.name || "غير معروف"}
+                {narrator.fame || "غير معروف"}
               </h4>
               {narrator.rank && (
                 <p className="text-sm text-muted-foreground">{narrator.rank}</p>

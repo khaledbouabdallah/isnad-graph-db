@@ -17,12 +17,12 @@
   --border: #262626;
   --ring: #14B8A6;
 
-  /* Narrator rank colors */
-  --sahabi: #F59E0B;    /* صحابي - Amber */
-  --thiqa: #14B8A6;     /* ثقة - Teal */
-  --thiqa-thabt: #10B981; /* ثقة ثبت - Emerald */
-  --hafiz: #06B6D4;     /* حافظ - Cyan */
-  --default-rank: #6366F1; /* Default - Indigo */
+  /* Narrator rank colors - matching graph-config.ts */
+  --sahabi: #F59E0B;      /* صحابي - Warm Gold */
+  --thiqa: #B45309;       /* ثقة - Copper */
+  --thiqa-thabt: #D97706; /* ثقة ثبت - Deep Amber */
+  --hafiz: #92400E;       /* حافظ - Bronze */
+  --default-rank: #A78BFA; /* Default - Soft Violet */
 }
 
 @theme inline {

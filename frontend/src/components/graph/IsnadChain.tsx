@@ -2,7 +2,7 @@
 
 import { motion } from "framer-motion";
 import type { ChainNarrator } from "@/lib/types";
-import { getRankColorHex, RANK_LABELS } from "@/lib/graph-config";
+import { getRankColorHex, RANK_LABELS, RANK_COLORS } from "@/lib/graph-config";
 import Link from "next/link";
 
 interface IsnadChainProps {
@@ -68,7 +68,7 @@ export default function IsnadChain({ chain, className = "" }: IsnadChainProps) {
                     {/* Narrator info */}
                     <div className="flex-1 min-w-0">
                       <h4 className="font-bold text-lg truncate group-hover:text-primary transition-colors">
-                        {narrator.name || "غير معروف"}
+                        {narrator.fame || "غير معروف"}
                       </h4>
                       <div className="flex items-center gap-2 mt-1">
                         {narrator.rank && (
@@ -85,7 +85,7 @@ export default function IsnadChain({ chain, className = "" }: IsnadChainProps) {
                           </span>
                         )}
                         {isLast && (
-                          <span className="text-xs px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-400">
+                          <span className="text-xs px-2 py-0.5 rounded-full" style={{ backgroundColor: "#F59E0B20", color: "#F59E0B" }}>
                             آخر الإسناد
                           </span>
                         )}
@@ -167,19 +167,12 @@ export default function IsnadChain({ chain, className = "" }: IsnadChainProps) {
         </h4>
         <div className="flex flex-wrap justify-center gap-3">
           {Object.entries(RANK_LABELS).map(([key, label]) => {
-            const colorKey = key as keyof typeof import("@/lib/graph-config").RANK_COLORS;
-            const colors = {
-              sahabi: "#F59E0B",
-              thiqaThabt: "#10B981",
-              thiqa: "#14B8A6",
-              hafiz: "#06B6D4",
-              default: "#8B5CF6",
-            };
+            const colorKey = key as keyof typeof RANK_COLORS;
             return (
               <div key={key} className="flex items-center gap-2">
                 <div
                   className="w-3 h-3 rounded-full"
-                  style={{ backgroundColor: colors[colorKey] }}
+                  style={{ backgroundColor: RANK_COLORS[colorKey] }}
                 />
                 <span className="text-xs text-muted-foreground">{label}</span>
               </div>

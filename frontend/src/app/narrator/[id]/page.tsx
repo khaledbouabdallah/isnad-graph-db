@@ -97,13 +97,26 @@ export default function NarratorPage() {
               {/* Info */}
               <div className="flex-1">
                 <h1 className="text-3xl font-bold mb-2">
-                  {narrator.name || "غير معروف"}
+                  {narrator.fame || "غير معروف"}
                 </h1>
                 <p className="text-lg text-muted-foreground mb-2">
                   {narrator.rank || "غير محدد"}
                 </p>
-                {narrator.fame && (
-                  <p className="text-muted-foreground">{narrator.fame}</p>
+                {(narrator.birth_year || narrator.death_year) && (
+                  <div className="flex items-center gap-3 text-sm text-muted-foreground">
+                    {narrator.birth_year && (
+                      <span className="flex items-center gap-1">
+                        <span>🌟</span>
+                        <span>ولد: {narrator.birth_year} هـ</span>
+                      </span>
+                    )}
+                    {narrator.death_year && (
+                      <span className="flex items-center gap-1">
+                        <span>📅</span>
+                        <span>توفي: {narrator.death_year} هـ</span>
+                      </span>
+                    )}
+                  </div>
                 )}
               </div>
 
@@ -167,7 +180,7 @@ export default function NarratorPage() {
                       href={`/narrator/${teacher.id}`}
                       className="block p-2 rounded-lg hover:bg-secondary transition-colors"
                     >
-                      <p className="font-medium">{teacher.name}</p>
+                      <p className="font-medium">{teacher.fame}</p>
                       <p className="text-sm text-muted-foreground">
                         {teacher.hadith_count} أحاديث
                       </p>
@@ -189,7 +202,7 @@ export default function NarratorPage() {
                       href={`/narrator/${student.id}`}
                       className="block p-2 rounded-lg hover:bg-secondary transition-colors"
                     >
-                      <p className="font-medium">{student.name}</p>
+                      <p className="font-medium">{student.fame}</p>
                       <p className="text-sm text-muted-foreground">
                         {student.hadith_count} أحاديث
                       </p>
