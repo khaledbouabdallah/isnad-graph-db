@@ -1,8 +1,18 @@
 from fastapi import APIRouter, Query
 from app.database import db
 from app.models import Hadith, Narrator
+import unicodedata
 
 router = APIRouter()
+
+
+def normalize_arabic(text: str) -> str:
+    """Remove diacritics from Arabic text for search."""
+    if not text:
+        return text
+    nfd = unicodedata.normalize("NFD", text)
+    normalized = "".join(char for char in nfd if unicodedata.category(char) != "Mn")
+    return unicodedata.normalize("NFC", normalized)
 
 
 @router.get("/hadiths", response_model=list[Hadith])
@@ -10,10 +20,11 @@ async def search_hadiths(
     q: str = Query(..., min_length=2, description="Search query for hadith text"),
     limit: int = Query(20, ge=1, le=50),
 ):
-    """Search hadiths by matn (text content)."""
+    """Search hadiths by matn (text content) using normalized text."""
+    normalized_q = normalize_arabic(q)
     query = """
         MATCH (h:Hadith)
-        WHERE h.matn CONTAINS $q OR h.full_text CONTAINS $q
+        WHERE h.normalized_matn CONTAINS $q OR h.matn CONTAINS $q
         OPTIONAL MATCH (h)-[:HAS_CHAIN]->(first:Person)
         RETURN h.number as number,
                h.matn as matn,
@@ -21,7 +32,7 @@ async def search_hadiths(
         ORDER BY h.number
         LIMIT $limit
     """
-    results = await db.execute_read(query, q=q, limit=limit)
+    results = await db.execute_read(query, q=normalized_q, limit=limit)
     return [Hadith(**r, chain_length=None) for r in results]
 
 
@@ -30,10 +41,11 @@ async def search_narrators(
     q: str = Query(..., min_length=2, description="Search query for narrator name"),
     limit: int = Query(20, ge=1, le=50),
 ):
-    """Search narrators by name."""
+    """Search narrators by name using normalized text."""
+    normalized_q = normalize_arabic(q)
     query = """
         MATCH (n:Person)
-        WHERE n.name CONTAINS $q
+        WHERE n.normalized_fame CONTAINS $q OR n.fame CONTAINS $q
         OPTIONAL MATCH (n)-[r1:NARRATED_FROM]->()
         WITH n, COUNT(DISTINCT r1) as out_count
         OPTIONAL MATCH ()-[r2:NARRATED_FROM]->(n)
@@ -47,7 +59,7 @@ async def search_narrators(
         ORDER BY total DESC
         LIMIT $limit
     """
-    results = await db.execute_read(query, q=q, limit=limit)
+    results = await db.execute_read(query, q=normalized_q, limit=limit)
     return [Narrator(**r) for r in results]
 
 
@@ -56,11 +68,13 @@ async def search_all(
     q: str = Query(..., min_length=2, description="Search query"),
     limit: int = Query(10, ge=1, le=20),
 ):
-    """Search both hadiths and narrators."""
+    """Search both hadiths and narrators using normalized text."""
+    normalized_q = normalize_arabic(q)
+
     # Search narrators
     narrators_query = """
         MATCH (n:Person)
-        WHERE n.name CONTAINS $q
+        WHERE n.normalized_fame CONTAINS $q OR n.fame CONTAINS $q
         OPTIONAL MATCH (n)-[r1:NARRATED_FROM]->()
         WITH n, COUNT(DISTINCT r1) as out_count
         OPTIONAL MATCH ()-[r2:NARRATED_FROM]->(n)
@@ -72,18 +86,18 @@ async def search_all(
         ORDER BY hadith_count DESC
         LIMIT $limit
     """
-    narrators = await db.execute_read(narrators_query, q=q, limit=limit)
+    narrators = await db.execute_read(narrators_query, q=normalized_q, limit=limit)
 
     # Search hadiths
     hadiths_query = """
         MATCH (h:Hadith)
-        WHERE h.matn CONTAINS $q
+        WHERE h.normalized_matn CONTAINS $q OR h.matn CONTAINS $q
         RETURN h.number as number,
                h.matn as matn
         ORDER BY h.number
         LIMIT $limit
     """
-    hadiths = await db.execute_read(hadiths_query, q=q, limit=limit)
+    hadiths = await db.execute_read(hadiths_query, q=normalized_q, limit=limit)
 
     return {
         "narrators": [Narrator(**n, fame=None) for n in narrators],

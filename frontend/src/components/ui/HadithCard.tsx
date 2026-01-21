@@ -1,6 +1,5 @@
 "use client";
 
-import Link from "next/link";
 import { motion } from "framer-motion";
 import type { Hadith } from "@/lib/types";
 import { truncate } from "@/lib/utils";
@@ -8,18 +7,25 @@ import { truncate } from "@/lib/utils";
 interface HadithCardProps {
   hadith: Hadith;
   index?: number;
+  onClick?: (hadithNumber: number) => void;
 }
 
-export default function HadithCard({ hadith, index = 0 }: HadithCardProps) {
+export default function HadithCard({ hadith, index = 0, onClick }: HadithCardProps) {
+  const handleClick = () => {
+    if (onClick) {
+      onClick(hadith.number);
+    }
+  };
+
   return (
     <motion.div
       initial={{ opacity: 0, y: 20 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ delay: index * 0.05 }}
     >
-      <Link
-        href={`/hadith/${hadith.number}`}
-        className="block p-4 bg-card border border-border rounded-xl hover:border-primary/50 transition-all hover:bg-secondary group"
+      <div
+        onClick={handleClick}
+        className="block p-4 bg-card border border-border rounded-xl hover:border-primary/50 transition-all hover:bg-secondary group cursor-pointer"
       >
         {/* Header */}
         <div className="flex items-center justify-between mb-2">
@@ -64,7 +70,7 @@ export default function HadithCard({ hadith, index = 0 }: HadithCardProps) {
             />
           </svg>
         </div>
-      </Link>
+      </div>
     </motion.div>
   );
 }

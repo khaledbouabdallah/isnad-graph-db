@@ -8,7 +8,7 @@ router = APIRouter()
 @router.get("", response_model=list[Narrator])
 async def list_narrators(
     skip: int = Query(0, ge=0),
-    limit: int = Query(20, ge=1, le=100),
+    limit: int = Query(20, ge=1, le=2000),
     sort_by: str = Query("connections", regex="^(connections|name|hadiths)$"),
 ):
     """List narrators with pagination, sorted by total connections."""

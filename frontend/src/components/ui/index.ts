@@ -5,3 +5,5 @@ export { default as HadithCard } from "./HadithCard";
 export { default as Navbar } from "./Navbar";
 export { default as GraphLegend } from "./GraphLegend";
 export { GraphControls } from "./GraphControls";
+export { NarratorSidePanel } from "./NarratorSidePanel";
+export { HadithSidePanel } from "./HadithSidePanel";

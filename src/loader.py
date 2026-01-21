@@ -43,6 +43,7 @@ def load_to_neo4j(
                         n.rank = $rank,
                         n.birth_year = $birth_year,
                         n.death_year = $death_year,
+                        n.normalized_fame = $normalized_fame,
                         n.is_narrator = true
                     """,
                     id=narrator["id"],
@@ -51,6 +52,7 @@ def load_to_neo4j(
                     rank=narrator["rank"],
                     birth_year=narrator.get("birth_year"),
                     death_year=narrator.get("death_year"),
+                    normalized_fame=narrator.get("normalized_fame", narrator["fame"]),
                 )
 
         print("Creating hadiths and chains...")
@@ -65,13 +67,15 @@ def load_to_neo4j(
                 SET h.book = $book,
                     h.chapter = $chapter,
                     h.matn = $matn,
-                    h.full_text = $full_text
+                    h.full_text = $full_text,
+                    h.normalized_matn = $normalized_matn
                 """,
                 number=hadith["hadith_number"],
                 book=hadith.get("book", ""),
                 chapter=hadith.get("chapter", ""),
                 matn=hadith["matn"],
                 full_text=hadith["full_text"],
+                normalized_matn=hadith.get("normalized_matn", hadith["matn"]),
             )
 
             chain = hadith["chain"]

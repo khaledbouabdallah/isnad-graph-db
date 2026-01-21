@@ -76,6 +76,7 @@ export interface NetworkGraphRef {
   zoomIn: () => void;
   zoomOut: () => void;
   resetCamera: () => void;
+  animateChain: (chain: Array<{ id: number }>) => void;
 }
 
 const NetworkGraph = forwardRef<NetworkGraphRef, NetworkGraphProps>(
@@ -118,6 +119,52 @@ const NetworkGraph = forwardRef<NetworkGraphRef, NetworkGraphProps>(
         if (camera) {
           camera.animatedReset({ duration: 300 });
         }
+      },
+      animateChain: (chain: Array<{ id: number }>) => {
+        const sigma = sigmaRef.current;
+        if (!sigma) return;
+
+        const graph = sigma.getGraph();
+        const nodeIds = chain.map(n => String(n.id));
+
+        // Animate each node in sequence like a signal
+        let currentIndex = 0;
+        const animateNext = () => {
+          if (currentIndex >= nodeIds.length) {
+            // Reset after animation
+            setTimeout(() => sigma.refresh(), 500);
+            return;
+          }
+
+          const nodeId = nodeIds[currentIndex];
+          if (!graph.hasNode(nodeId)) {
+            currentIndex++;
+            animateNext();
+            return;
+          }
+
+          // Pulse effect - temporarily increase size and change color
+          const originalSize = graph.getNodeAttribute(nodeId, "size");
+          const originalColor = graph.getNodeAttribute(nodeId, "color");
+
+          // Pulse to gold with glow
+          graph.setNodeAttribute(nodeId, "size", originalSize * 2);
+          graph.setNodeAttribute(nodeId, "color", "#F59E0B");
+          sigma.refresh();
+
+          // Return to original after pulse
+          setTimeout(() => {
+            graph.setNodeAttribute(nodeId, "size", originalSize);
+            graph.setNodeAttribute(nodeId, "color", originalColor);
+            sigma.refresh();
+
+            // Move to next node
+            currentIndex++;
+            animateNext();
+          }, 300);
+        };
+
+        animateNext();
       },
     }));
 
@@ -234,7 +281,7 @@ const NetworkGraph = forwardRef<NetworkGraphRef, NetworkGraphProps>(
               res.isHovered = true; // Mark as hovered for label renderer
             } else if (graph.areNeighbors(node, hovered)) {
               // Neighbors - keep original color, show label
-              res.highlighted = true;
+              //res.highlighted = true; // remove highlighted styling as gives duplicate effect
               res.zIndex = 1;
             } else {
               // Non-connected nodes - fade to transparent warm grey, hide label
@@ -259,9 +306,16 @@ const NetworkGraph = forwardRef<NetworkGraphRef, NetworkGraphProps>(
           if (hovered) {
             const [source, target] = graph.extremities(edge);
             if (source === hovered || target === hovered) {
-              // Connected to hovered node - show with gold highlight
+              // Connected to hovered node - show with directional coloring
               res.hidden = false;
-              res.color = EDGE_STYLES.highlighted;
+
+              // Blue for outgoing (narrated from), Green for incoming (narrated to)
+              if (source === hovered) {
+                res.color = EDGE_STYLES.narratedFrom; // Outgoing: hovered → other (narrated from)
+              } else {
+                res.color = EDGE_STYLES.narratedTo; // Incoming: other → hovered (narrated to)
+              }
+
               res.size = 2.5;
               res.zIndex = 1;
             } else {

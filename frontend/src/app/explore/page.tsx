@@ -1,13 +1,13 @@
 "use client";
 
 import { useEffect, useState, useMemo, useRef, useCallback } from "react";
-import { useRouter } from "next/navigation";
 import dynamic from "next/dynamic";
 import { motion } from "framer-motion";
+import { Search } from "lucide-react";
 import { getGraphOverview } from "@/lib/api";
-import { Navbar, GraphLegend, GraphControls } from "@/components/ui";
+import { Navbar, GraphLegend, GraphControls, NarratorSidePanel } from "@/components/ui";
 import { matchesRankFilter } from "@/lib/graph-config";
-import type { GraphData } from "@/lib/types";
+import type { GraphData, Narrator } from "@/lib/types";
 import type { NetworkGraphRef } from "@/components/graph/NetworkGraph";
 
 const NetworkGraph = dynamic(
@@ -19,7 +19,6 @@ const NetworkGraph = dynamic(
 const MAX_NODES = 2000;
 
 export default function ExplorePage() {
-  const router = useRouter();
   const graphRef = useRef<NetworkGraphRef>(null);
   const mainRef = useRef<HTMLElement>(null);
 
@@ -31,6 +30,12 @@ export default function ExplorePage() {
   const [nodeCount, setNodeCount] = useState(500);
   const [selectedRank, setSelectedRank] = useState("all");
   const [showEdges, setShowEdges] = useState(false);
+
+  // Narrator search and side panel
+  const [searchQuery, setSearchQuery] = useState("");
+  const [searchResults, setSearchResults] = useState<Narrator[]>([]);
+  const [selectedNarratorId, setSelectedNarratorId] = useState<number | null>(null);
+  const [isPanelOpen, setIsPanelOpen] = useState(false);
 
   // Fullscreen handler - fullscreen the entire main section (includes toolbar)
   const toggleFullscreen = useCallback(() => {
@@ -57,6 +62,45 @@ export default function ExplorePage() {
       }
     }
     loadData();
+  }, []);
+
+  // Search narrators by fame
+  useEffect(() => {
+    if (!searchQuery || searchQuery.length < 2) {
+      setSearchResults([]);
+      return;
+    }
+
+    const searchNarrators = async () => {
+      try {
+        const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000/api";
+        const response = await fetch(
+          `${API_BASE}/search/narrators?q=${encodeURIComponent(searchQuery)}&limit=10`
+        );
+        if (!response.ok) {
+          const errorText = await response.text();
+          console.error(`Search failed with status ${response.status}:`, errorText);
+          throw new Error(`Search failed: ${response.status}`);
+        }
+        const results = await response.json();
+        setSearchResults(results);
+      } catch (error) {
+        console.error("Search error:", error);
+        setSearchResults([]);
+      }
+    };
+
+    const debounce = setTimeout(searchNarrators, 300);
+    return () => clearTimeout(debounce);
+  }, [searchQuery]);
+
+  // Handle narrator selection
+  const handleNarratorClick = useCallback((id: number | string) => {
+    const narratorId = typeof id === 'string' ? parseInt(id, 10) : id;
+    setSelectedNarratorId(narratorId);
+    setIsPanelOpen(true);
+    setSearchQuery("");
+    setSearchResults([]);
   }, []);
 
   // Client-side filtered data
@@ -93,6 +137,44 @@ export default function ExplorePage() {
       <Navbar />
 
       <main ref={mainRef} className="pt-16 h-screen flex flex-col bg-background">
+        {/* Search Bar */}
+        <div className="p-4 border-b border-border bg-card/50 backdrop-blur-sm">
+          <div className="max-w-md mx-auto relative">
+            <div className="relative">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-muted-foreground" />
+              <input
+                type="text"
+                placeholder="ابحث عن راوي بالشهرة..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                className="w-full pl-10 pr-4 py-2 bg-background border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary text-right"
+              />
+            </div>
+
+            {/* Search Results Dropdown */}
+            {searchResults.length > 0 && (
+              <div className="absolute top-full mt-2 w-full bg-card border border-border rounded-lg shadow-lg z-50 max-h-80 overflow-y-auto">
+                {searchResults.map((narrator) => (
+                  <button
+                    key={narrator.id}
+                    onClick={() => handleNarratorClick(narrator.id)}
+                    className="w-full p-3 text-right hover:bg-secondary transition-colors border-b border-border last:border-0"
+                  >
+                    <div className="font-semibold text-foreground">
+                      {narrator.fame || narrator.name}
+                    </div>
+                    {narrator.rank && (
+                      <div className="text-sm text-muted-foreground mt-1">
+                        {narrator.rank}
+                      </div>
+                    )}
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
+
         {/* Controls */}
         <GraphControls
           nodeCount={nodeCount}
@@ -132,7 +214,7 @@ export default function ExplorePage() {
             <NetworkGraph
               ref={graphRef}
               data={filteredData}
-              onNodeClick={(id) => router.push(`/narrator/${id}`)}
+              onNodeClick={handleNarratorClick}
               showEdges={showEdges}
               className="h-full"
             />
@@ -153,6 +235,13 @@ export default function ExplorePage() {
           <GraphLegend compact className="justify-center" />
         </div>
       </main>
+
+      {/* Narrator Side Panel */}
+      <NarratorSidePanel
+        narratorId={selectedNarratorId}
+        isOpen={isPanelOpen}
+        onClose={() => setIsPanelOpen(false)}
+      />
     </div>
   );
 }

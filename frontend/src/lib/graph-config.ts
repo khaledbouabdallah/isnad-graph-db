@@ -16,6 +16,8 @@ export const RANK_COLORS = {
 export const EDGE_STYLES = {
   default: "#ffffff00",        // Invisible by default
   highlighted: "#F59E0B",      // Gold for highlighted connections
+  narratedFrom: "#3B82F6",     // Blue for outgoing edges (narrated from)
+  narratedTo: "#10B981",       // Green for incoming edges (narrated to)
   visible: "#78716C40",        // Subtle warm grey when showing all
   faded: "#ffffff05",          // Nearly invisible for faded edges
 } as const;

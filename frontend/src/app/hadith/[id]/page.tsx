@@ -127,7 +127,7 @@ export default function HadithPage() {
                 متن الحديث
               </h2>
               <p className="text-lg leading-loose whitespace-pre-wrap">
-                {hadith.full_text || hadith.matn || "لا يوجد نص"}
+                {hadith.matn || hadith.full_text || "لا يوجد نص"}
               </p>
             </motion.div>
 

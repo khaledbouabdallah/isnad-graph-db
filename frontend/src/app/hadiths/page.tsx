@@ -1,9 +1,9 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useCallback } from "react";
 import { motion } from "framer-motion";
 import { getHadiths } from "@/lib/api";
-import { Navbar, HadithCard, SearchBar } from "@/components/ui";
+import { Navbar, HadithCard, SearchBar, HadithSidePanel } from "@/components/ui";
 import type { Hadith } from "@/lib/types";
 
 export default function HadithsPage() {
@@ -11,6 +11,10 @@ export default function HadithsPage() {
   const [loading, setLoading] = useState(true);
   const [page, setPage] = useState(0);
   const [hasMore, setHasMore] = useState(true);
+
+  // Side panel state
+  const [selectedHadithNumber, setSelectedHadithNumber] = useState<number | null>(null);
+  const [isPanelOpen, setIsPanelOpen] = useState(false);
 
   const loadHadiths = async (pageNum: number, append = false) => {
     setLoading(true);
@@ -39,6 +43,12 @@ export default function HadithsPage() {
     loadHadiths(nextPage, true);
   };
 
+  // Handle hadith card click
+  const handleHadithClick = useCallback((hadithNumber: number) => {
+    setSelectedHadithNumber(hadithNumber);
+    setIsPanelOpen(true);
+  }, []);
+
   return (
     <div className="min-h-screen bg-background">
       <Navbar />
@@ -63,7 +73,12 @@ export default function HadithsPage() {
           {/* Hadith List */}
           <div className="space-y-4">
             {hadiths.map((hadith, index) => (
-              <HadithCard key={hadith.number} hadith={hadith} index={index} />
+              <HadithCard
+                key={hadith.number}
+                hadith={hadith}
+                index={index}
+                onClick={handleHadithClick}
+              />
             ))}
           </div>
 
@@ -88,6 +103,13 @@ export default function HadithsPage() {
           )}
         </div>
       </main>
+
+      {/* Hadith Side Panel */}
+      <HadithSidePanel
+        hadithNumber={selectedHadithNumber}
+        isOpen={isPanelOpen}
+        onClose={() => setIsPanelOpen(false)}
+      />
     </div>
   );
 }
