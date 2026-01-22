@@ -10,21 +10,26 @@ interface NarratorSidePanelProps {
   narratorId: number | null;
   isOpen: boolean;
   onClose: () => void;
+  onRelationClick?: (mainNarratorId: number, relatedNarratorId: number) => void;
 }
 
 export function NarratorSidePanel({
   narratorId,
   isOpen,
   onClose,
+  onRelationClick,
 }: NarratorSidePanelProps) {
   const [narrator, setNarrator] = useState<NarratorDetail | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [selectedRelationId, setSelectedRelationId] = useState<string | null>(null);
 
   useEffect(() => {
     if (!narratorId || !isOpen) {
       return;
     }
+
+    setSelectedRelationId(null);
 
     const fetchNarrator = async () => {
       setLoading(true);
@@ -54,15 +59,6 @@ export function NarratorSidePanel({
     <AnimatePresence>
       {isOpen && (
         <>
-          {/* Backdrop */}
-          <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            onClick={onClose}
-            className="fixed inset-0 bg-black/20 z-40"
-          />
-
           {/* Side Panel */}
           <motion.div
             initial={{ x: "100%" }}
@@ -171,19 +167,39 @@ export function NarratorSidePanel({
                         روى عن (الشيوخ)
                       </h4>
                       <div className="space-y-2">
-                        {narrator.teachers.map((teacher) => (
-                          <div
-                            key={teacher.id}
-                            className="flex items-center justify-between p-3 bg-blue-50 hover:bg-blue-100 rounded-lg transition-colors border border-blue-100"
-                          >
-                            <span className="font-medium text-blue-900">
-                              {teacher.fame}
-                            </span>
-                            <span className="text-sm text-blue-700">
-                              {formatNumber(teacher.hadith_count)} حديث
-                            </span>
-                          </div>
-                        ))}
+                        {narrator.teachers.map((teacher) => {
+                          const isSelected = selectedRelationId === teacher.id;
+                          return (
+                            <button
+                              key={teacher.id}
+                              onClick={() => {
+                                const newSelectedId = isSelected ? null : teacher.id;
+                                setSelectedRelationId(newSelectedId);
+                                if (newSelectedId && onRelationClick) {
+                                  onRelationClick(Number(narrator.id), Number(teacher.id));
+                                } else if (!newSelectedId && onRelationClick) {
+                                  onRelationClick(Number(narrator.id), Number(narrator.id));
+                                }
+                              }}
+                              className={`w-full flex items-center justify-between p-3 rounded-lg transition-all border-2 ${
+                                isSelected
+                                  ? "bg-blue-600 border-blue-700 shadow-lg scale-105"
+                                  : "bg-blue-50 hover:bg-blue-100 border-blue-100 hover:border-blue-200"
+                              }`}
+                            >
+                              <span className={`font-medium ${
+                                isSelected ? "text-white" : "text-blue-900"
+                              }`}>
+                                {teacher.fame}
+                              </span>
+                              <span className={`text-sm ${
+                                isSelected ? "text-blue-100" : "text-blue-700"
+                              }`}>
+                                {formatNumber(teacher.hadith_count)} حديث
+                              </span>
+                            </button>
+                          );
+                        })}
                       </div>
                     </div>
                   )}
@@ -196,19 +212,39 @@ export function NarratorSidePanel({
                         روى عنه (التلاميذ)
                       </h4>
                       <div className="space-y-2">
-                        {narrator.students.map((student) => (
-                          <div
-                            key={student.id}
-                            className="flex items-center justify-between p-3 bg-green-50 hover:bg-green-100 rounded-lg transition-colors border border-green-100"
-                          >
-                            <span className="font-medium text-green-900">
-                              {student.fame}
-                            </span>
-                            <span className="text-sm text-green-700">
-                              {formatNumber(student.hadith_count)} حديث
-                            </span>
-                          </div>
-                        ))}
+                        {narrator.students.map((student) => {
+                          const isSelected = selectedRelationId === student.id;
+                          return (
+                            <button
+                              key={student.id}
+                              onClick={() => {
+                                const newSelectedId = isSelected ? null : student.id;
+                                setSelectedRelationId(newSelectedId);
+                                if (newSelectedId && onRelationClick) {
+                                  onRelationClick(Number(narrator.id), Number(student.id));
+                                } else if (!newSelectedId && onRelationClick) {
+                                  onRelationClick(Number(narrator.id), Number(narrator.id));
+                                }
+                              }}
+                              className={`w-full flex items-center justify-between p-3 rounded-lg transition-all border-2 ${
+                                isSelected
+                                  ? "bg-green-600 border-green-700 shadow-lg scale-105"
+                                  : "bg-green-50 hover:bg-green-100 border-green-100 hover:border-green-200"
+                              }`}
+                            >
+                              <span className={`font-medium ${
+                                isSelected ? "text-white" : "text-green-900"
+                              }`}>
+                                {student.fame}
+                              </span>
+                              <span className={`text-sm ${
+                                isSelected ? "text-green-100" : "text-green-700"
+                              }`}>
+                                {formatNumber(student.hadith_count)} حديث
+                              </span>
+                            </button>
+                          );
+                        })}
                       </div>
                     </div>
                   )}

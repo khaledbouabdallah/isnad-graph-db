@@ -36,6 +36,7 @@ export default function ExplorePage() {
   const [searchResults, setSearchResults] = useState<Narrator[]>([]);
   const [selectedNarratorId, setSelectedNarratorId] = useState<number | null>(null);
   const [isPanelOpen, setIsPanelOpen] = useState(false);
+  const [specificEdge, setSpecificEdge] = useState<{ source: string; target: string } | null>(null);
 
   // Fullscreen handler - fullscreen the entire main section (includes toolbar)
   const toggleFullscreen = useCallback(() => {
@@ -101,6 +102,20 @@ export default function ExplorePage() {
     setIsPanelOpen(true);
     setSearchQuery("");
     setSearchResults([]);
+  }, []);
+
+  // Handle teacher/student relation click
+  const handleRelationClick = useCallback((mainId: number, relatedId: number) => {
+    if (mainId === relatedId) {
+      // Reset to show all connections of main narrator
+      setSpecificEdge(null);
+    } else {
+      // Show only specific connection
+      setSpecificEdge({
+        source: String(mainId),
+        target: String(relatedId),
+      });
+    }
   }, []);
 
   // Client-side filtered data
@@ -216,6 +231,7 @@ export default function ExplorePage() {
               data={filteredData}
               onNodeClick={handleNarratorClick}
               showEdges={showEdges}
+              specificEdge={specificEdge}
               className="h-full"
             />
           ) : (
@@ -240,7 +256,11 @@ export default function ExplorePage() {
       <NarratorSidePanel
         narratorId={selectedNarratorId}
         isOpen={isPanelOpen}
-        onClose={() => setIsPanelOpen(false)}
+        onClose={() => {
+          setIsPanelOpen(false);
+          setSpecificEdge(null);
+        }}
+        onRelationClick={handleRelationClick}
       />
     </div>
   );

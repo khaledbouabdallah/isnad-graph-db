@@ -27,6 +27,7 @@ export default function EgoGraph({
   const containerRef = useRef<HTMLDivElement>(null);
   const sigmaRef = useRef<Sigma | null>(null);
   const hoveredNodeRef = useRef<string | null>(null);
+  const clickedNodeRef = useRef<string | null>(null);
 
   const handleNodeClick = useCallback(
     (nodeId: string) => {
@@ -87,10 +88,13 @@ export default function EgoGraph({
       nodeReducer: (node, nodeData) => {
         const res = { ...nodeData };
         const hovered = hoveredNodeRef.current;
-        if (hovered && hovered !== centerId) {
-          if (node === hovered || node === centerId || graph.areNeighbors(node, hovered)) {
+        const clicked = clickedNodeRef.current;
+        const activeNode = hovered || clicked;
+
+        if (activeNode && activeNode !== centerId) {
+          if (node === activeNode || node === centerId || graph.areNeighbors(node, activeNode)) {
             res.highlighted = true;
-            if (node === hovered) {
+            if (node === activeNode) {
               res.size = (res.size as number) * 1.2;
             }
           } else {
@@ -98,15 +102,18 @@ export default function EgoGraph({
             res.label = "";
           }
         }
-        // When not hovering, keep default labels visible
+        // When not hovering or clicked, keep default labels visible
         return res;
       },
       edgeReducer: (edge, edgeData) => {
         const res = { ...edgeData };
         const hovered = hoveredNodeRef.current;
-        if (hovered && hovered !== centerId) {
+        const clicked = clickedNodeRef.current;
+        const activeNode = hovered || clicked;
+
+        if (activeNode && activeNode !== centerId) {
           const [source, target] = graph.extremities(edge);
-          if (source !== hovered && target !== hovered) {
+          if (source !== activeNode && target !== activeNode) {
             res.hidden = true;
           } else {
             res.color = EDGE_STYLES.highlighted;
@@ -131,7 +138,22 @@ export default function EgoGraph({
     });
 
     sigma.on("clickNode", ({ node }) => {
+      // Toggle clicked state: if clicking the same node, unselect it
+      if (clickedNodeRef.current === node) {
+        clickedNodeRef.current = null;
+      } else {
+        clickedNodeRef.current = node;
+      }
+      sigma.refresh();
       handleNodeClick(node);
+    });
+
+    // Click on stage (background) clears selection
+    sigma.on("clickStage", () => {
+      if (clickedNodeRef.current) {
+        clickedNodeRef.current = null;
+        sigma.refresh();
+      }
     });
 
     sigmaRef.current = sigma;

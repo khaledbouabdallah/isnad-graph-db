@@ -69,6 +69,7 @@ interface NetworkGraphProps {
   data: GraphData;
   onNodeClick?: (nodeId: string) => void;
   showEdges?: boolean;
+  specificEdge?: { source: string; target: string } | null;
   className?: string;
 }
 
@@ -80,10 +81,12 @@ export interface NetworkGraphRef {
 }
 
 const NetworkGraph = forwardRef<NetworkGraphRef, NetworkGraphProps>(
-  function NetworkGraph({ data, onNodeClick, showEdges = false, className = "" }, ref) {
+  function NetworkGraph({ data, onNodeClick, showEdges = false, specificEdge = null, className = "" }, ref) {
     const containerRef = useRef<HTMLDivElement>(null);
     const sigmaRef = useRef<Sigma | null>(null);
     const hoveredNodeRef = useRef<string | null>(null);
+    const clickedNodeRef = useRef<string | null>(null);
+    const specificEdgeRef = useRef(specificEdge);
     const showEdgesRef = useRef(showEdges);
     const isInitializedRef = useRef(false);
 
@@ -99,6 +102,18 @@ const NetworkGraph = forwardRef<NetworkGraphRef, NetworkGraphProps>(
         }
       }
     }, [showEdges]);
+
+    // Keep specificEdgeRef in sync
+    useEffect(() => {
+      specificEdgeRef.current = specificEdge;
+      if (isInitializedRef.current && sigmaRef.current) {
+        try {
+          sigmaRef.current.refresh();
+        } catch {
+          // Sigma not ready yet, ignore
+        }
+      }
+    }, [specificEdge]);
 
     // Expose imperative methods for zoom/camera control
     useImperativeHandle(ref, () => ({
@@ -271,15 +286,39 @@ const NetworkGraph = forwardRef<NetworkGraphRef, NetworkGraphProps>(
         nodeReducer: (node, nodeData) => {
           const res = { ...nodeData };
           const hovered = hoveredNodeRef.current;
+          const clicked = clickedNodeRef.current;
+          const specificEdge = specificEdgeRef.current;
 
-          if (hovered) {
-            if (node === hovered) {
-              // Hovered node - make it glow (larger), keep label for drawHover
+          // If specific edge is set, only show those two nodes
+          if (specificEdge) {
+            if (node === specificEdge.source || node === specificEdge.target) {
+              res.highlighted = true;
+              if (node === specificEdge.source) {
+                res.size = (res.size as number) * NODE_STYLES.glowMultiplier;
+                res.zIndex = 2;
+                res.isHovered = true; // Mark source as hovered to use drawHover
+              } else {
+                res.zIndex = 1;
+                // Target node uses highlighted label style
+              }
+            } else {
+              res.color = NODE_STYLES.faded;
+              res.label = "";
+              res.zIndex = 0;
+            }
+            return res;
+          }
+
+          const activeNode = hovered || clicked; // Use hover if present, else clicked
+
+          if (activeNode) {
+            if (node === activeNode) {
+              // Active node - make it glow (larger), keep label for drawHover
               res.highlighted = true;
               res.size = (res.size as number) * NODE_STYLES.glowMultiplier;
               res.zIndex = 2;
               res.isHovered = true; // Mark as hovered for label renderer
-            } else if (graph.areNeighbors(node, hovered)) {
+            } else if (graph.areNeighbors(node, activeNode)) {
               // Neighbors - keep original color, show label
               //res.highlighted = true; // remove highlighted styling as gives duplicate effect
               res.zIndex = 1;
@@ -290,30 +329,52 @@ const NetworkGraph = forwardRef<NetworkGraphRef, NetworkGraphProps>(
               res.zIndex = 0;
             }
           }
-          // When not hovering, keep default labels visible
+          // When not hovering or clicked, keep default labels visible
           return res;
         },
         edgeReducer: (edge, edgeData) => {
           const res = { ...edgeData };
           const hovered = hoveredNodeRef.current;
+          const clicked = clickedNodeRef.current;
+          const specificEdge = specificEdgeRef.current;
+
+          // If specific edge is set, only show that edge
+          if (specificEdge) {
+            const [source, target] = graph.extremities(edge);
+            const isSpecificEdge =
+              (source === specificEdge.source && target === specificEdge.target) ||
+              (source === specificEdge.target && target === specificEdge.source);
+
+            if (isSpecificEdge) {
+              res.hidden = false;
+              res.color = EDGE_STYLES.highlighted;
+              res.size = 3;
+              res.zIndex = 2;
+            } else {
+              res.hidden = true;
+            }
+            return res;
+          }
+
+          const activeNode = hovered || clicked; // Use hover if present, else clicked
 
           // Edges hidden by default unless showEdges is true
-          if (!showEdgesRef.current && !hovered) {
+          if (!showEdgesRef.current && !activeNode) {
             res.hidden = true;
             return res;
           }
 
-          if (hovered) {
+          if (activeNode) {
             const [source, target] = graph.extremities(edge);
-            if (source === hovered || target === hovered) {
-              // Connected to hovered node - show with directional coloring
+            if (source === activeNode || target === activeNode) {
+              // Connected to active node - show with directional coloring
               res.hidden = false;
 
               // Blue for outgoing (narrated from), Green for incoming (narrated to)
-              if (source === hovered) {
-                res.color = EDGE_STYLES.narratedFrom; // Outgoing: hovered → other (narrated from)
+              if (source === activeNode) {
+                res.color = EDGE_STYLES.narratedFrom; // Outgoing: active → other (narrated from)
               } else {
-                res.color = EDGE_STYLES.narratedTo; // Incoming: other → hovered (narrated to)
+                res.color = EDGE_STYLES.narratedTo; // Incoming: other → active (narrated to)
               }
 
               res.size = 2.5;
@@ -346,7 +407,22 @@ const NetworkGraph = forwardRef<NetworkGraphRef, NetworkGraphProps>(
       });
 
       sigma.on("clickNode", ({ node }) => {
+        // Toggle clicked state: if clicking the same node, unselect it
+        if (clickedNodeRef.current === node) {
+          clickedNodeRef.current = null;
+        } else {
+          clickedNodeRef.current = node;
+        }
+        sigma.refresh();
         handleNodeClick(node);
+      });
+
+      // Click on stage (background) clears selection
+      sigma.on("clickStage", () => {
+        if (clickedNodeRef.current) {
+          clickedNodeRef.current = null;
+          sigma.refresh();
+        }
       });
 
       sigmaRef.current = sigma;

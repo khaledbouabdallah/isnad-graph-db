@@ -88,7 +88,6 @@ async def get_narrator(narrator_id: str):
                teacher.death_year as death_year,
                hadith_count
         ORDER BY hadith_count DESC
-        LIMIT 20
     """
     teachers = await db.execute_read(teachers_query, id=narrator_id)
 
@@ -104,7 +103,6 @@ async def get_narrator(narrator_id: str):
                student.death_year as death_year,
                hadith_count
         ORDER BY hadith_count DESC
-        LIMIT 20
     """
     students = await db.execute_read(students_query, id=narrator_id)
 
@@ -117,7 +115,6 @@ async def get_narrator(narrator_id: str):
         UNWIND all_hadiths as h
         RETURN DISTINCT h
         ORDER BY h
-        LIMIT 100
     """
     hadiths = await db.execute_read(hadiths_query, id=narrator_id)
     hadith_numbers = [r["h"] for r in hadiths if r["h"] is not None]
