@@ -244,6 +244,17 @@ export default function ExplorePage() {
               </p>
             </div>
           )}
+
+          {/* Narrator Side Panel - Inside graph container */}
+          <NarratorSidePanel
+            narratorId={selectedNarratorId}
+            isOpen={isPanelOpen}
+            onClose={() => {
+              setIsPanelOpen(false);
+              setSpecificEdge(null);
+            }}
+            onRelationClick={handleRelationClick}
+          />
         </div>
 
         {/* Legend */}
@@ -251,17 +262,6 @@ export default function ExplorePage() {
           <GraphLegend compact className="justify-center" />
         </div>
       </main>
-
-      {/* Narrator Side Panel */}
-      <NarratorSidePanel
-        narratorId={selectedNarratorId}
-        isOpen={isPanelOpen}
-        onClose={() => {
-          setIsPanelOpen(false);
-          setSpecificEdge(null);
-        }}
-        onRelationClick={handleRelationClick}
-      />
     </div>
   );
 }
