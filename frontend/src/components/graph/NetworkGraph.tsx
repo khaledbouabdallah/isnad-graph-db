@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useCallback, forwardRef, useImperativeHandle } from "react";
+import { useEffect, useRef, useCallback, forwardRef, useImperativeHandle, useState } from "react";
 import Graph from "graphology";
 import Sigma from "sigma";
 import { EdgeCurvedArrowProgram } from "@sigma/edge-curve";
@@ -68,6 +68,7 @@ function drawHover(context: CanvasRenderingContext2D, data: any, settings: any):
 interface NetworkGraphProps {
   data: GraphData;
   onNodeClick?: (nodeId: string) => void;
+  onBackgroundClick?: () => void;
   showEdges?: boolean;
   specificEdge?: { source: string; target: string } | null;
   className?: string;
@@ -78,10 +79,11 @@ export interface NetworkGraphRef {
   zoomOut: () => void;
   resetCamera: () => void;
   animateChain: (chain: Array<{ id: number }>) => void;
+  focusOnNode: (nodeId: string) => void;
 }
 
 const NetworkGraph = forwardRef<NetworkGraphRef, NetworkGraphProps>(
-  function NetworkGraph({ data, onNodeClick, showEdges = false, specificEdge = null, className = "" }, ref) {
+  function NetworkGraph({ data, onNodeClick, onBackgroundClick, showEdges = false, specificEdge = null, className = "" }, ref) {
     const containerRef = useRef<HTMLDivElement>(null);
     const sigmaRef = useRef<Sigma | null>(null);
     const hoveredNodeRef = useRef<string | null>(null);
@@ -89,6 +91,9 @@ const NetworkGraph = forwardRef<NetworkGraphRef, NetworkGraphProps>(
     const specificEdgeRef = useRef(specificEdge);
     const showEdgesRef = useRef(showEdges);
     const isInitializedRef = useRef(false);
+    const animationFrameRef = useRef<number | null>(null);
+    const pulseFactorRef = useRef(1); // Animation pulse factor
+    const [isDetailMode, setIsDetailMode] = useState(false); // Track detailed mode for animation
 
     // Keep showEdgesRef in sync - only refresh if sigma is fully ready
     useEffect(() => {
@@ -106,6 +111,7 @@ const NetworkGraph = forwardRef<NetworkGraphRef, NetworkGraphProps>(
     // Keep specificEdgeRef in sync
     useEffect(() => {
       specificEdgeRef.current = specificEdge;
+      setIsDetailMode(!!specificEdge || !!clickedNodeRef.current);
       if (isInitializedRef.current && sigmaRef.current) {
         try {
           sigmaRef.current.refresh();
@@ -181,6 +187,29 @@ const NetworkGraph = forwardRef<NetworkGraphRef, NetworkGraphProps>(
 
         animateNext();
       },
+      focusOnNode: (nodeId: string) => {
+        const sigma = sigmaRef.current;
+        if (!sigma) return;
+
+        const graph = sigma.getGraph();
+        if (!graph.hasNode(nodeId)) return;
+
+        // Set clicked node to highlight it and its neighbors
+        clickedNodeRef.current = nodeId;
+        setIsDetailMode(true);
+
+        // Get node position and zoom in on it
+        const nodeDisplayData = sigma.getNodeDisplayData(nodeId);
+        if (nodeDisplayData) {
+          const camera = sigma.getCamera();
+          camera.animate(
+            { x: nodeDisplayData.x, y: nodeDisplayData.y, ratio: 0.3 },
+            { duration: 600, easing: "quadraticInOut" }
+          );
+        }
+
+        sigma.refresh();
+      },
     }));
 
     const handleNodeClick = useCallback(
@@ -189,6 +218,10 @@ const NetworkGraph = forwardRef<NetworkGraphRef, NetworkGraphProps>(
       },
       [onNodeClick]
     );
+
+    const handleBackgroundClick = useCallback(() => {
+      onBackgroundClick?.();
+    }, [onBackgroundClick]);
 
     useEffect(() => {
       if (!containerRef.current || data.nodes.length === 0) return;
@@ -283,6 +316,10 @@ const NetworkGraph = forwardRef<NetworkGraphRef, NetworkGraphProps>(
           curved: EdgeCurvedArrowProgram,
         },
         defaultEdgeType: "curved",
+        renderEdgeLabels: true,
+        edgeLabelSize: 12,
+        edgeLabelColor: { color: "#fef3c7" },
+        edgeLabelWeight: "600",
         nodeReducer: (node, nodeData) => {
           const res = { ...nodeData };
           const hovered = hoveredNodeRef.current;
@@ -348,7 +385,8 @@ const NetworkGraph = forwardRef<NetworkGraphRef, NetworkGraphProps>(
             if (isSpecificEdge) {
               res.hidden = false;
               res.color = EDGE_STYLES.highlighted;
-              res.size = 3;
+              const baseSize = 2 + Math.min(edgeData.weight * 0.3, 5);
+              res.size = baseSize * pulseFactorRef.current; // Apply pulse
               res.zIndex = 2;
             } else {
               res.hidden = true;
@@ -377,7 +415,9 @@ const NetworkGraph = forwardRef<NetworkGraphRef, NetworkGraphProps>(
                 res.color = EDGE_STYLES.narratedTo; // Incoming: other → active (narrated to)
               }
 
-              res.size = 2.5;
+              // Size based on hadith count - thicker edges for more hadiths
+              const baseSize = 1.5 + Math.min(edgeData.weight * 0.3, 5);
+              res.size = baseSize * pulseFactorRef.current; // Apply pulse
               res.zIndex = 1;
             } else {
               // Not connected - hide completely
@@ -410,8 +450,10 @@ const NetworkGraph = forwardRef<NetworkGraphRef, NetworkGraphProps>(
         // Toggle clicked state: if clicking the same node, unselect it
         if (clickedNodeRef.current === node) {
           clickedNodeRef.current = null;
+          setIsDetailMode(false);
         } else {
           clickedNodeRef.current = node;
+          setIsDetailMode(true);
         }
         sigma.refresh();
         handleNodeClick(node);
@@ -421,8 +463,10 @@ const NetworkGraph = forwardRef<NetworkGraphRef, NetworkGraphProps>(
       sigma.on("clickStage", () => {
         if (clickedNodeRef.current) {
           clickedNodeRef.current = null;
+          setIsDetailMode(false);
           sigma.refresh();
         }
+        handleBackgroundClick();
       });
 
       sigmaRef.current = sigma;
@@ -432,7 +476,56 @@ const NetworkGraph = forwardRef<NetworkGraphRef, NetworkGraphProps>(
         isInitializedRef.current = false;
         sigma.kill();
       };
-    }, [data, handleNodeClick]);
+    }, [data, handleNodeClick, handleBackgroundClick]);
+
+    // Animate edges when in detailed mode (node clicked or specific edge)
+    useEffect(() => {
+      const sigma = sigmaRef.current;
+      if (!sigma || !isDetailMode) {
+        // Reset pulse factor when not in detail mode
+        pulseFactorRef.current = 1;
+        if (animationFrameRef.current) {
+          cancelAnimationFrame(animationFrameRef.current);
+          animationFrameRef.current = null;
+        }
+        return;
+      }
+
+      let phase = 0;
+      let isRunning = true;
+
+      const animate = () => {
+        if (!isRunning || !sigmaRef.current) {
+          return;
+        }
+
+        phase += 0.08; // Animation speed
+        pulseFactorRef.current = 1 + Math.sin(phase) * 0.25; // Pulse between 0.75x and 1.25x
+
+        try {
+          sigma.refresh();
+          animationFrameRef.current = requestAnimationFrame(animate);
+        } catch (error) {
+          // Sigma instance was destroyed, stop animation
+          isRunning = false;
+          if (animationFrameRef.current) {
+            cancelAnimationFrame(animationFrameRef.current);
+            animationFrameRef.current = null;
+          }
+        }
+      };
+
+      animationFrameRef.current = requestAnimationFrame(animate);
+
+      return () => {
+        isRunning = false;
+        pulseFactorRef.current = 1;
+        if (animationFrameRef.current) {
+          cancelAnimationFrame(animationFrameRef.current);
+          animationFrameRef.current = null;
+        }
+      };
+    }, [isDetailMode]);
 
     return (
       <div

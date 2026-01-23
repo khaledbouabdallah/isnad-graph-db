@@ -102,6 +102,18 @@ export default function ExplorePage() {
     setIsPanelOpen(true);
     setSearchQuery("");
     setSearchResults([]);
+
+    // Focus on the node in the graph
+    if (graphRef.current) {
+      graphRef.current.focusOnNode(String(narratorId));
+    }
+  }, []);
+
+  // Handle background click - close panel and return to explore mode
+  const handleBackgroundClick = useCallback(() => {
+    setIsPanelOpen(false);
+    setSelectedNarratorId(null);
+    setSpecificEdge(null);
   }, []);
 
   // Handle teacher/student relation click
@@ -153,8 +165,8 @@ export default function ExplorePage() {
 
       <main ref={mainRef} className="pt-16 h-screen flex flex-col bg-background">
         {/* Search Bar */}
-        <div className="p-4 border-b border-border bg-card/50 backdrop-blur-sm">
-          <div className="max-w-md mx-auto relative">
+        <div className="p-4 border-b border-border bg-card/50 backdrop-blur-sm z-[100]">
+          <div className="max-w-md mx-auto relative z-[100]">
             <div className="relative">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-muted-foreground" />
               <input
@@ -168,7 +180,7 @@ export default function ExplorePage() {
 
             {/* Search Results Dropdown */}
             {searchResults.length > 0 && (
-              <div className="absolute top-full mt-2 w-full bg-card border border-border rounded-lg shadow-lg z-50 max-h-80 overflow-y-auto">
+              <div className="absolute top-full mt-2 w-full bg-card border border-border rounded-lg shadow-lg z-[100] max-h-80 overflow-y-auto">
                 {searchResults.map((narrator) => (
                   <button
                     key={narrator.id}
@@ -230,6 +242,7 @@ export default function ExplorePage() {
               ref={graphRef}
               data={filteredData}
               onNodeClick={handleNarratorClick}
+              onBackgroundClick={handleBackgroundClick}
               showEdges={showEdges}
               specificEdge={specificEdge}
               className="h-full"

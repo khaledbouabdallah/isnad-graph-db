@@ -7,8 +7,6 @@ import { motion } from "framer-motion";
 const navItems = [
   { href: "/", label: "الرئيسية", icon: "🏠" },
   { href: "/explore", label: "استكشاف", icon: "🔍" },
-  { href: "/hadiths", label: "الأحاديث", icon: "📖" },
-  { href: "/narrators", label: "الرواة", icon: "👥" },
 ];
 
 export default function Navbar() {
