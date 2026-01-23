@@ -45,7 +45,6 @@ async def get_graph_overview(
         OPTIONAL MATCH ()-[r2:NARRATED_FROM]->(n)
         WITH n, out_count, COUNT(DISTINCT r2) as in_count
         WITH n, out_count + in_count as total
-        WHERE total > 5
         RETURN n.id as id,
                n.fame as label,
                n.rank as rank,
