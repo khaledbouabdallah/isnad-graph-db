@@ -80,6 +80,7 @@ export interface NetworkGraphRef {
   resetCamera: () => void;
   animateChain: (chain: Array<{ id: number }>) => void;
   focusOnNode: (nodeId: string) => void;
+  resetToExploreMode: () => void;
 }
 
 const NetworkGraph = forwardRef<NetworkGraphRef, NetworkGraphProps>(
@@ -209,6 +210,17 @@ const NetworkGraph = forwardRef<NetworkGraphRef, NetworkGraphProps>(
         }
 
         sigma.refresh();
+      },
+      resetToExploreMode: () => {
+        // Clear all focus state and return to explore mode
+        clickedNodeRef.current = null;
+        hoveredNodeRef.current = null;
+        setIsDetailMode(false);
+
+        const sigma = sigmaRef.current;
+        if (sigma) {
+          sigma.refresh();
+        }
       },
     }));
 
@@ -435,6 +447,12 @@ const NetworkGraph = forwardRef<NetworkGraphRef, NetworkGraphProps>(
 
       // Event handlers
       sigma.on("enterNode", ({ node }) => {
+        // Don't hover faded nodes when in specific edge mode
+        const specificEdge = specificEdgeRef.current;
+        if (specificEdge && node !== specificEdge.source && node !== specificEdge.target) {
+          return; // Ignore hover on faded nodes
+        }
+
         hoveredNodeRef.current = node;
         sigma.refresh();
         containerRef.current!.style.cursor = "pointer";
@@ -447,6 +465,12 @@ const NetworkGraph = forwardRef<NetworkGraphRef, NetworkGraphProps>(
       });
 
       sigma.on("clickNode", ({ node }) => {
+        // Don't allow clicking faded nodes when in specific edge mode
+        const specificEdge = specificEdgeRef.current;
+        if (specificEdge && node !== specificEdge.source && node !== specificEdge.target) {
+          return; // Ignore clicks on faded nodes
+        }
+
         // Toggle clicked state: if clicking the same node, unselect it
         if (clickedNodeRef.current === node) {
           clickedNodeRef.current = null;

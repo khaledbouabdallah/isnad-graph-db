@@ -95,11 +95,26 @@ export default function ExplorePage() {
     return () => clearTimeout(debounce);
   }, [searchQuery]);
 
-  // Handle narrator selection
+  // Reset to explore mode - unified function for consistency
+  const resetToExploreMode = useCallback(() => {
+    setIsPanelOpen(false);
+    setSelectedNarratorId(null);
+    setSpecificEdge(null);
+
+    // Reset graph to explore mode
+    if (graphRef.current) {
+      graphRef.current.resetToExploreMode();
+    }
+  }, []);
+
+  // Handle narrator selection - enters detail mode - enters detail mode
   const handleNarratorClick = useCallback((id: number | string) => {
     const narratorId = typeof id === 'string' ? parseInt(id, 10) : id;
+
+    // Enter detail mode
     setSelectedNarratorId(narratorId);
     setIsPanelOpen(true);
+    setSpecificEdge(null); // Reset specific edge when selecting new narrator
     setSearchQuery("");
     setSearchResults([]);
 
@@ -109,20 +124,18 @@ export default function ExplorePage() {
     }
   }, []);
 
-  // Handle background click - close panel and return to explore mode
+  // Handle background click - return to explore mode
   const handleBackgroundClick = useCallback(() => {
-    setIsPanelOpen(false);
-    setSelectedNarratorId(null);
-    setSpecificEdge(null);
-  }, []);
+    resetToExploreMode();
+  }, [resetToExploreMode]);
 
-  // Handle teacher/student relation click
+  // Handle teacher/student relation click - shows specific connection
   const handleRelationClick = useCallback((mainId: number, relatedId: number) => {
     if (mainId === relatedId) {
-      // Reset to show all connections of main narrator
+      // Clicking main narrator resets to show all their connections
       setSpecificEdge(null);
     } else {
-      // Show only specific connection
+      // Show only specific connection between main narrator and selected relation
       setSpecificEdge({
         source: String(mainId),
         target: String(relatedId),
@@ -262,10 +275,7 @@ export default function ExplorePage() {
           <NarratorSidePanel
             narratorId={selectedNarratorId}
             isOpen={isPanelOpen}
-            onClose={() => {
-              setIsPanelOpen(false);
-              setSpecificEdge(null);
-            }}
+            onClose={resetToExploreMode}
             onRelationClick={handleRelationClick}
           />
         </div>
