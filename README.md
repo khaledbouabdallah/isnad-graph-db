@@ -160,7 +160,7 @@ LIMIT 5
 - ✅ Neo4j loader with complete narrator network
 - ✅ Full Sahih Bukhari dataset (7,031 hadiths)
 - ✅ Analysis queries and visualization
-- ✅ Web interface for queries (planned)
+- ✅ Web interface for queries
 
 ## Future Enhancements
 - Add SON_OF edges if genealogical data becomes available

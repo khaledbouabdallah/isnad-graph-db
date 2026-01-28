@@ -2,15 +2,16 @@
 
 import { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { X, ChevronRight, Calendar, Star, Users } from "lucide-react";
+import { X, ChevronRight, Calendar, Star, Users, Search, BookOpen } from "lucide-react";
 import { formatNumber } from "@/lib/utils";
-import type { NarratorDetail } from "@/lib/types";
+import type { NarratorDetail, Hadith } from "@/lib/types";
 
 interface NarratorSidePanelProps {
   narratorId: number | null;
   isOpen: boolean;
   onClose: () => void;
   onRelationClick?: (mainNarratorId: number, relatedNarratorId: number) => void;
+  onHadithClick?: (hadithNumber: number) => void;
 }
 
 export function NarratorSidePanel({
@@ -18,11 +19,23 @@ export function NarratorSidePanel({
   isOpen,
   onClose,
   onRelationClick,
+  onHadithClick,
 }: NarratorSidePanelProps) {
   const [narrator, setNarrator] = useState<NarratorDetail | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [selectedRelationId, setSelectedRelationId] = useState<string | null>(null);
+
+  // Hadith search state
+  const [hadithSearchQuery, setHadithSearchQuery] = useState("");
+  const [hadithSearchResults, setHadithSearchResults] = useState<Hadith[]>([]);
+  const [isSearchingHadiths, setIsSearchingHadiths] = useState(false);
+
+  // Hadith list state
+  const [narratorHadiths, setNarratorHadiths] = useState<Hadith[]>([]);
+  const [filteredNarratorHadiths, setFilteredNarratorHadiths] = useState<Hadith[]>([]);
+  const [loadingHadiths, setLoadingHadiths] = useState(false);
+  const [hadithListFilter, setHadithListFilter] = useState("");
 
   useEffect(() => {
     if (!narratorId || !isOpen) {
@@ -54,6 +67,82 @@ export function NarratorSidePanel({
 
     fetchNarrator();
   }, [narratorId, isOpen]);
+
+  // Hadith search effect
+  useEffect(() => {
+    if (!hadithSearchQuery.trim() || !isOpen) {
+      setHadithSearchResults([]);
+      return;
+    }
+
+    const searchHadiths = async () => {
+      setIsSearchingHadiths(true);
+      try {
+        const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000/api";
+        const response = await fetch(
+          `${API_BASE}/search/hadiths?q=${encodeURIComponent(hadithSearchQuery)}`
+        );
+        if (response.ok) {
+          const data = await response.json();
+          setHadithSearchResults(data);
+        }
+      } catch (err) {
+        console.error("Failed to search hadiths:", err);
+      } finally {
+        setIsSearchingHadiths(false);
+      }
+    };
+
+    const debounce = setTimeout(searchHadiths, 300);
+    return () => clearTimeout(debounce);
+  }, [hadithSearchQuery, isOpen]);
+
+  // Fetch narrator's hadiths list
+  useEffect(() => {
+    if (!narratorId || !isOpen) {
+      setNarratorHadiths([]);
+      setFilteredNarratorHadiths([]);
+      return;
+    }
+
+    const fetchNarratorHadiths = async () => {
+      setLoadingHadiths(true);
+      try {
+        const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000/api";
+        const url = selectedRelationId
+          ? `${API_BASE}/graph/narrator/${narratorId}/hadiths?related_narrator_id=${selectedRelationId}`
+          : `${API_BASE}/graph/narrator/${narratorId}/hadiths`;
+
+        const response = await fetch(url);
+        if (response.ok) {
+          const data = await response.json();
+          setNarratorHadiths(data);
+          setFilteredNarratorHadiths(data);
+        }
+      } catch (err) {
+        console.error("Failed to fetch narrator hadiths:", err);
+      } finally {
+        setLoadingHadiths(false);
+      }
+    };
+
+    fetchNarratorHadiths();
+  }, [narratorId, selectedRelationId, isOpen]);
+
+  // Filter hadith list based on search
+  useEffect(() => {
+    if (!hadithListFilter.trim()) {
+      setFilteredNarratorHadiths(narratorHadiths);
+      return;
+    }
+
+    const filtered = narratorHadiths.filter(
+      (hadith) =>
+        hadith.matn?.toLowerCase().includes(hadithListFilter.toLowerCase()) ||
+        hadith.number.toString().includes(hadithListFilter)
+    );
+    setFilteredNarratorHadiths(filtered);
+  }, [hadithListFilter, narratorHadiths]);
 
   return (
     <AnimatePresence>
@@ -131,6 +220,61 @@ export function NarratorSidePanel({
                     )}
                   </div>
 
+                  {/* Hadith Search Section */}
+                  <div className="bg-card border border-border rounded-2xl p-6">
+                    <h4 className="text-lg font-bold mb-4">بحث عن حديث</h4>
+                    <div className="relative">
+                      <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+                      <input
+                        type="text"
+                        placeholder="ابحث في أحاديث هذا الراوي..."
+                        value={hadithSearchQuery}
+                        onChange={(e) => setHadithSearchQuery(e.target.value)}
+                        className="w-full pl-10 pr-4 py-2 bg-background border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary text-right"
+                      />
+                    </div>
+
+                    {/* Hadith Search Results */}
+                    {hadithSearchResults.length > 0 && (
+                      <div className="mt-3 space-y-2 max-h-60 overflow-y-auto">
+                        {hadithSearchResults.map((hadith) => (
+                          <button
+                            key={hadith.number}
+                            onClick={() => {
+                              if (onHadithClick) {
+                                onHadithClick(hadith.number);
+                                setHadithSearchQuery("");
+                              }
+                            }}
+                            className="w-full p-3 text-right bg-secondary hover:bg-secondary/80 rounded-lg transition-colors border border-border"
+                          >
+                            <div className="flex items-center gap-3 mb-1">
+                              <span className="px-2 py-0.5 bg-emerald-100 text-emerald-800 text-xs font-bold rounded">
+                                {hadith.number}
+                              </span>
+                              {hadith.first_narrator && (
+                                <span className="text-xs text-muted-foreground">
+                                  {hadith.first_narrator}
+                                </span>
+                              )}
+                            </div>
+                            {hadith.matn && (
+                              <div className="text-sm text-foreground line-clamp-2">
+                                {hadith.matn}
+                              </div>
+                            )}
+                          </button>
+                        ))}
+                      </div>
+                    )}
+
+                    {isSearchingHadiths && (
+                      <div className="mt-3 text-center text-sm text-muted-foreground">
+                        جاري البحث...
+                      </div>
+                    )}
+                  </div>
+
                   {/* Statistics */}
                   <div className="grid grid-cols-3 gap-4">
                     <div className="bg-card border border-border rounded-xl p-4 text-center">
@@ -156,6 +300,79 @@ export function NarratorSidePanel({
                       <div className="text-sm text-muted-foreground mt-1">
                         تلاميذ
                       </div>
+                    </div>
+                  </div>
+
+                  {/* Hadith List Section */}
+                  <div className="bg-card border border-border rounded-2xl p-6">
+                    <div className="flex items-center justify-between mb-4">
+                      <h4 className="text-lg font-bold flex items-center gap-2">
+                        <BookOpen className="w-5 h-5 text-emerald-600" />
+                        قائمة الأحاديث
+                        {selectedRelationId && (
+                          <span className="text-sm font-normal text-muted-foreground">
+                            (مشتركة)
+                          </span>
+                        )}
+                      </h4>
+                      <span className="text-sm text-muted-foreground">
+                        {formatNumber(filteredNarratorHadiths.length)} حديث
+                      </span>
+                    </div>
+
+                    {/* Hadith List Filter */}
+                    <div className="relative mb-3">
+                      <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+                      <input
+                        type="text"
+                        placeholder="ابحث في القائمة..."
+                        value={hadithListFilter}
+                        onChange={(e) => setHadithListFilter(e.target.value)}
+                        className="w-full pl-10 pr-4 py-2 bg-background border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500 text-right text-sm"
+                      />
+                    </div>
+
+                    {/* Scrollable Hadith List */}
+                    <div className="max-h-80 overflow-y-auto space-y-2">
+                      {loadingHadiths && (
+                        <div className="text-center py-8 text-sm text-muted-foreground">
+                          جاري التحميل...
+                        </div>
+                      )}
+
+                      {!loadingHadiths && filteredNarratorHadiths.length === 0 && (
+                        <div className="text-center py-8 text-sm text-muted-foreground">
+                          {hadithListFilter ? "لا توجد نتائج" : "لا توجد أحاديث"}
+                        </div>
+                      )}
+
+                      {!loadingHadiths && filteredNarratorHadiths.map((hadith) => (
+                        <button
+                          key={hadith.number}
+                          onClick={() => {
+                            if (onHadithClick) {
+                              onHadithClick(hadith.number);
+                            }
+                          }}
+                          className="w-full p-3 text-right bg-background hover:bg-secondary/50 rounded-lg transition-colors border border-border hover:border-emerald-300"
+                        >
+                          <div className="flex items-center gap-3 mb-1">
+                            <span className="px-2 py-0.5 bg-emerald-100 text-emerald-800 text-xs font-bold rounded">
+                              {hadith.number}
+                            </span>
+                            {hadith.first_narrator && (
+                              <span className="text-xs text-muted-foreground truncate">
+                                {hadith.first_narrator}
+                              </span>
+                            )}
+                          </div>
+                          {hadith.matn && (
+                            <div className="text-sm text-foreground line-clamp-2 leading-relaxed">
+                              {hadith.matn}
+                            </div>
+                          )}
+                        </button>
+                      ))}
                     </div>
                   </div>
 

@@ -68,9 +68,11 @@ function drawHover(context: CanvasRenderingContext2D, data: any, settings: any):
 interface NetworkGraphProps {
   data: GraphData;
   onNodeClick?: (nodeId: string) => void;
+  onEdgeClick?: (source: string, target: string) => void;
   onBackgroundClick?: () => void;
   showEdges?: boolean;
   specificEdge?: { source: string; target: string } | null;
+  hadithChain?: string[] | null; // Array of node IDs in the hadith chain
   className?: string;
 }
 
@@ -84,12 +86,13 @@ export interface NetworkGraphRef {
 }
 
 const NetworkGraph = forwardRef<NetworkGraphRef, NetworkGraphProps>(
-  function NetworkGraph({ data, onNodeClick, onBackgroundClick, showEdges = false, specificEdge = null, className = "" }, ref) {
+  function NetworkGraph({ data, onNodeClick, onEdgeClick, onBackgroundClick, showEdges = false, specificEdge = null, hadithChain = null, className = "" }, ref) {
     const containerRef = useRef<HTMLDivElement>(null);
     const sigmaRef = useRef<Sigma | null>(null);
     const hoveredNodeRef = useRef<string | null>(null);
     const clickedNodeRef = useRef<string | null>(null);
     const specificEdgeRef = useRef(specificEdge);
+    const hadithChainRef = useRef(hadithChain);
     const showEdgesRef = useRef(showEdges);
     const isInitializedRef = useRef(false);
     const animationFrameRef = useRef<number | null>(null);
@@ -121,6 +124,19 @@ const NetworkGraph = forwardRef<NetworkGraphRef, NetworkGraphProps>(
         }
       }
     }, [specificEdge]);
+
+    // Keep hadithChainRef in sync
+    useEffect(() => {
+      hadithChainRef.current = hadithChain;
+      setIsDetailMode(!!hadithChain || !!specificEdge || !!clickedNodeRef.current);
+      if (isInitializedRef.current && sigmaRef.current) {
+        try {
+          sigmaRef.current.refresh();
+        } catch {
+          // Sigma not ready yet, ignore
+        }
+      }
+    }, [hadithChain, specificEdge]);
 
     // Expose imperative methods for zoom/camera control
     useImperativeHandle(ref, () => ({
@@ -231,6 +247,13 @@ const NetworkGraph = forwardRef<NetworkGraphRef, NetworkGraphProps>(
       [onNodeClick]
     );
 
+    const handleEdgeClick = useCallback(
+      (source: string, target: string) => {
+        onEdgeClick?.(source, target);
+      },
+      [onEdgeClick]
+    );
+
     const handleBackgroundClick = useCallback(() => {
       onBackgroundClick?.();
     }, [onBackgroundClick]);
@@ -337,8 +360,24 @@ const NetworkGraph = forwardRef<NetworkGraphRef, NetworkGraphProps>(
           const hovered = hoveredNodeRef.current;
           const clicked = clickedNodeRef.current;
           const specificEdge = specificEdgeRef.current;
+          const hadithChain = hadithChainRef.current;
 
-          // If specific edge is set, only show those two nodes
+          // Priority 1: Hadith chain highlighting
+          if (hadithChain && hadithChain.length > 0) {
+            if (hadithChain.includes(node)) {
+              res.highlighted = true;
+              res.size = (res.size as number) * NODE_STYLES.glowMultiplier;
+              res.zIndex = 2;
+              res.color = "#10b981"; // Emerald green for hadith chain
+            } else {
+              res.color = NODE_STYLES.faded;
+              res.label = "";
+              res.zIndex = 0;
+            }
+            return res;
+          }
+
+          // Priority 2: If specific edge is set, only show those two nodes
           if (specificEdge) {
             if (node === specificEdge.source || node === specificEdge.target) {
               res.highlighted = true;
@@ -386,8 +425,31 @@ const NetworkGraph = forwardRef<NetworkGraphRef, NetworkGraphProps>(
           const hovered = hoveredNodeRef.current;
           const clicked = clickedNodeRef.current;
           const specificEdge = specificEdgeRef.current;
+          const hadithChain = hadithChainRef.current;
 
-          // If specific edge is set, only show that edge
+          // Priority 1: Hadith chain highlighting - show edges between chain nodes
+          if (hadithChain && hadithChain.length > 1) {
+            const [source, target] = graph.extremities(edge);
+            const sourceIndex = hadithChain.indexOf(source);
+            const targetIndex = hadithChain.indexOf(target);
+
+            // Check if this edge connects consecutive nodes in the chain
+            const isChainEdge =
+              (sourceIndex >= 0 && targetIndex >= 0 && Math.abs(sourceIndex - targetIndex) === 1);
+
+            if (isChainEdge) {
+              res.hidden = false;
+              res.color = "#10b981"; // Emerald green for hadith chain
+              const baseSize = 3 + Math.min(edgeData.weight * 0.3, 5);
+              res.size = baseSize;
+              res.zIndex = 3;
+            } else {
+              res.hidden = true;
+            }
+            return res;
+          }
+
+          // Priority 2: If specific edge is set, only show that edge
           if (specificEdge) {
             const [source, target] = graph.extremities(edge);
             const isSpecificEdge =
@@ -481,6 +543,14 @@ const NetworkGraph = forwardRef<NetworkGraphRef, NetworkGraphProps>(
         }
         sigma.refresh();
         handleNodeClick(node);
+      });
+
+      // Click on edge to show hadiths for that relationship
+      sigma.on("clickEdge", ({ edge }) => {
+        const edgeData = graph.getEdgeAttributes(edge);
+        if (edgeData.source && edgeData.target) {
+          handleEdgeClick(edgeData.source, edgeData.target);
+        }
       });
 
       // Click on stage (background) clears selection

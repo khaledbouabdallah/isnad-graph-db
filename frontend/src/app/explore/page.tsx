@@ -5,9 +5,9 @@ import dynamic from "next/dynamic";
 import { motion } from "framer-motion";
 import { Search } from "lucide-react";
 import { getGraphOverview } from "@/lib/api";
-import { Navbar, GraphLegend, GraphControls, NarratorSidePanel } from "@/components/ui";
+import { Navbar, GraphLegend, GraphControls, NarratorSidePanel, HadithSidePanel, EdgeHadithsModal } from "@/components/ui";
 import { matchesRankFilter } from "@/lib/graph-config";
-import type { GraphData, Narrator } from "@/lib/types";
+import type { GraphData, Narrator, Hadith } from "@/lib/types";
 import type { NetworkGraphRef } from "@/components/graph/NetworkGraph";
 
 const NetworkGraph = dynamic(
@@ -33,10 +33,22 @@ export default function ExplorePage() {
 
   // Narrator search and side panel
   const [searchQuery, setSearchQuery] = useState("");
-  const [searchResults, setSearchResults] = useState<Narrator[]>([]);
+  const [searchType, setSearchType] = useState<"narrator" | "hadith">("narrator"); // Track search type
+  const [narratorSearchResults, setNarratorSearchResults] = useState<Narrator[]>([]);
+  const [hadithSearchResults, setHadithSearchResults] = useState<Hadith[]>([]);
   const [selectedNarratorId, setSelectedNarratorId] = useState<number | null>(null);
   const [isPanelOpen, setIsPanelOpen] = useState(false);
   const [specificEdge, setSpecificEdge] = useState<{ source: string; target: string } | null>(null);
+
+  // Hadith mode state
+  const [selectedHadithNumber, setSelectedHadithNumber] = useState<number | null>(null);
+  const [isHadithPanelOpen, setIsHadithPanelOpen] = useState(false);
+  const [hadithChain, setHadithChain] = useState<string[] | null>(null);
+
+  // Edge hadiths modal state
+  const [edgeSourceId, setEdgeSourceId] = useState<string | null>(null);
+  const [edgeTargetId, setEdgeTargetId] = useState<string | null>(null);
+  const [isEdgeModalOpen, setIsEdgeModalOpen] = useState(false);
 
   // Fullscreen handler - fullscreen the entire main section (includes toolbar)
   const toggleFullscreen = useCallback(() => {
@@ -65,41 +77,54 @@ export default function ExplorePage() {
     loadData();
   }, []);
 
-  // Search narrators by fame
+  // Search narrators or hadiths based on search type
   useEffect(() => {
     if (!searchQuery || searchQuery.length < 2) {
-      setSearchResults([]);
+      setNarratorSearchResults([]);
+      setHadithSearchResults([]);
       return;
     }
 
-    const searchNarrators = async () => {
+    const performSearch = async () => {
       try {
         const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000/api";
-        const response = await fetch(
-          `${API_BASE}/search/narrators?q=${encodeURIComponent(searchQuery)}&limit=10`
-        );
-        if (!response.ok) {
-          const errorText = await response.text();
-          console.error(`Search failed with status ${response.status}:`, errorText);
-          throw new Error(`Search failed: ${response.status}`);
+
+        if (searchType === "narrator") {
+          const response = await fetch(
+            `${API_BASE}/search/narrators?q=${encodeURIComponent(searchQuery)}&limit=10`
+          );
+          if (!response.ok) throw new Error(`Search failed: ${response.status}`);
+          const results = await response.json();
+          setNarratorSearchResults(results);
+          setHadithSearchResults([]);
+        } else {
+          const response = await fetch(
+            `${API_BASE}/search/hadiths?q=${encodeURIComponent(searchQuery)}&limit=10`
+          );
+          if (!response.ok) throw new Error(`Search failed: ${response.status}`);
+          const results = await response.json();
+          setHadithSearchResults(results);
+          setNarratorSearchResults([]);
         }
-        const results = await response.json();
-        setSearchResults(results);
       } catch (error) {
         console.error("Search error:", error);
-        setSearchResults([]);
+        setNarratorSearchResults([]);
+        setHadithSearchResults([]);
       }
     };
 
-    const debounce = setTimeout(searchNarrators, 300);
+    const debounce = setTimeout(performSearch, 300);
     return () => clearTimeout(debounce);
-  }, [searchQuery]);
+  }, [searchQuery, searchType]);
 
   // Reset to explore mode - unified function for consistency
   const resetToExploreMode = useCallback(() => {
     setIsPanelOpen(false);
     setSelectedNarratorId(null);
     setSpecificEdge(null);
+    setIsHadithPanelOpen(false);
+    setSelectedHadithNumber(null);
+    setHadithChain(null);
 
     // Reset graph to explore mode
     if (graphRef.current) {
@@ -111,12 +136,15 @@ export default function ExplorePage() {
   const handleNarratorClick = useCallback((id: number | string) => {
     const narratorId = typeof id === 'string' ? parseInt(id, 10) : id;
 
-    // Enter detail mode
+    // Enter narrator detail mode
     setSelectedNarratorId(narratorId);
     setIsPanelOpen(true);
     setSpecificEdge(null); // Reset specific edge when selecting new narrator
+    setIsHadithPanelOpen(false); // Close hadith panel if open
+    setSelectedHadithNumber(null);
     setSearchQuery("");
-    setSearchResults([]);
+    setNarratorSearchResults([]);
+    setHadithSearchResults([]);
 
     // Focus on the node in the graph
     if (graphRef.current) {
@@ -124,10 +152,42 @@ export default function ExplorePage() {
     }
   }, []);
 
+  // Handle hadith selection - enters hadith mode
+  const handleHadithClick = useCallback(async (hadithNumber: number) => {
+    // Enter hadith mode
+    setSelectedHadithNumber(hadithNumber);
+    setIsHadithPanelOpen(true);
+    setSearchQuery("");
+    setNarratorSearchResults([]);
+    setHadithSearchResults([]);
+
+    // Fetch hadith chain to highlight in graph
+    try {
+      const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000/api";
+      const response = await fetch(`${API_BASE}/hadiths/${hadithNumber}/chain`);
+      if (response.ok) {
+        const chain = await response.json();
+        const chainIds = chain.map((narrator: { id: string }) => narrator.id);
+        setHadithChain(chainIds);
+      }
+    } catch (err) {
+      console.error("Failed to fetch hadith chain:", err);
+      setHadithChain(null);
+    }
+    // Note: Narrator panel can stay open, allowing navigation from narrator -> hadith
+  }, []);
+
   // Handle background click - return to explore mode
   const handleBackgroundClick = useCallback(() => {
     resetToExploreMode();
   }, [resetToExploreMode]);
+
+  // Handle edge click - shows hadiths for that relationship
+  const handleEdgeClick = useCallback((source: string, target: string) => {
+    setEdgeSourceId(source);
+    setEdgeTargetId(target);
+    setIsEdgeModalOpen(true);
+  }, []);
 
   // Handle teacher/student relation click - shows specific connection
   const handleRelationClick = useCallback((mainId: number, relatedId: number) => {
@@ -179,22 +239,46 @@ export default function ExplorePage() {
       <main ref={mainRef} className="pt-16 h-screen flex flex-col bg-background">
         {/* Search Bar */}
         <div className="p-4 border-b border-border bg-card/50 backdrop-blur-sm z-[100]">
-          <div className="max-w-md mx-auto relative z-[100]">
+          <div className="max-w-2xl mx-auto relative z-[100]">
+            {/* Search Type Toggle */}
+            <div className="flex gap-2 mb-3 justify-center">
+              <button
+                onClick={() => setSearchType("narrator")}
+                className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
+                  searchType === "narrator"
+                    ? "bg-primary text-primary-foreground"
+                    : "bg-secondary text-secondary-foreground hover:bg-secondary/80"
+                }`}
+              >
+                بحث عن راوي
+              </button>
+              <button
+                onClick={() => setSearchType("hadith")}
+                className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
+                  searchType === "hadith"
+                    ? "bg-primary text-primary-foreground"
+                    : "bg-secondary text-secondary-foreground hover:bg-secondary/80"
+                }`}
+              >
+                بحث عن حديث
+              </button>
+            </div>
+
             <div className="relative">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-muted-foreground" />
               <input
                 type="text"
-                placeholder="ابحث عن راوي بالشهرة..."
+                placeholder={searchType === "narrator" ? "ابحث عن راوي بالشهرة..." : "ابحث عن حديث بالمتن..."}
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
                 className="w-full pl-10 pr-4 py-2 bg-background border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary text-right"
               />
             </div>
 
-            {/* Search Results Dropdown */}
-            {searchResults.length > 0 && (
+            {/* Search Results Dropdown - Narrators */}
+            {narratorSearchResults.length > 0 && (
               <div className="absolute top-full mt-2 w-full bg-card border border-border rounded-lg shadow-lg z-[100] max-h-80 overflow-y-auto">
-                {searchResults.map((narrator) => (
+                {narratorSearchResults.map((narrator) => (
                   <button
                     key={narrator.id}
                     onClick={() => handleNarratorClick(narrator.id)}
@@ -206,6 +290,35 @@ export default function ExplorePage() {
                     {narrator.rank && (
                       <div className="text-sm text-muted-foreground mt-1">
                         {narrator.rank}
+                      </div>
+                    )}
+                  </button>
+                ))}
+              </div>
+            )}
+
+            {/* Search Results Dropdown - Hadiths */}
+            {hadithSearchResults.length > 0 && (
+              <div className="absolute top-full mt-2 w-full bg-card border border-border rounded-lg shadow-lg z-[100] max-h-80 overflow-y-auto">
+                {hadithSearchResults.map((hadith) => (
+                  <button
+                    key={hadith.number}
+                    onClick={() => handleHadithClick(hadith.number)}
+                    className="w-full p-3 text-right hover:bg-secondary transition-colors border-b border-border last:border-0"
+                  >
+                    <div className="flex items-center gap-3 mb-1">
+                      <span className="px-2 py-0.5 bg-emerald-100 text-emerald-800 text-xs font-bold rounded">
+                        {hadith.number}
+                      </span>
+                      {hadith.first_narrator && (
+                        <span className="text-xs text-muted-foreground">
+                          {hadith.first_narrator}
+                        </span>
+                      )}
+                    </div>
+                    {hadith.matn && (
+                      <div className="text-sm text-foreground line-clamp-2">
+                        {hadith.matn}
                       </div>
                     )}
                   </button>
@@ -255,9 +368,11 @@ export default function ExplorePage() {
               ref={graphRef}
               data={filteredData}
               onNodeClick={handleNarratorClick}
+              onEdgeClick={handleEdgeClick}
               onBackgroundClick={handleBackgroundClick}
               showEdges={showEdges}
               specificEdge={specificEdge}
+              hadithChain={hadithChain}
               className="h-full"
             />
           ) : (
@@ -277,6 +392,24 @@ export default function ExplorePage() {
             isOpen={isPanelOpen}
             onClose={resetToExploreMode}
             onRelationClick={handleRelationClick}
+            onHadithClick={handleHadithClick}
+          />
+
+          {/* Hadith Side Panel - Inside graph container */}
+          <HadithSidePanel
+            hadithNumber={selectedHadithNumber}
+            isOpen={isHadithPanelOpen}
+            onClose={resetToExploreMode}
+            onNarratorClick={handleNarratorClick}
+          />
+
+          {/* Edge Hadiths Modal */}
+          <EdgeHadithsModal
+            sourceId={edgeSourceId}
+            targetId={edgeTargetId}
+            isOpen={isEdgeModalOpen}
+            onClose={() => setIsEdgeModalOpen(false)}
+            onHadithClick={handleHadithClick}
           />
         </div>
 

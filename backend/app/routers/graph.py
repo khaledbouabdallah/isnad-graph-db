@@ -217,3 +217,86 @@ async def get_hadith_graph(hadith_number: int):
     edges = [GraphEdge(**e) for e in edges_result]
 
     return GraphData(nodes=nodes, edges=edges)
+
+
+@router.get("/relationship/{source_id}/{target_id}/hadiths")
+async def get_relationship_hadiths(source_id: str, target_id: str):
+    """Get all hadiths where source narrated from target."""
+
+    query = """
+        MATCH (source:Person {id: $source_id})-[r:NARRATED_FROM]->(target:Person {id: $target_id})
+        WHERE r.hadith IS NOT NULL
+        WITH DISTINCT r.hadith as hadith_number
+        MATCH (h:Hadith {number: hadith_number})
+        OPTIONAL MATCH (h)-[:HAS_CHAIN]->(first:Person)
+        RETURN h.number as number,
+               h.matn as matn,
+               h.full_text as full_text,
+               first.fame as first_narrator
+        ORDER BY h.number
+        LIMIT 100
+    """
+
+    result = await db.execute_read(query, source_id=source_id, target_id=target_id)
+    return result
+
+
+@router.get("/narrator/{narrator_id}/hadiths")
+async def get_narrator_hadiths(
+    narrator_id: str, related_narrator_id: str | None = None
+):
+    """Get all hadiths for a narrator, optionally filtered by relationship with another narrator."""
+
+    if related_narrator_id:
+        # ULTRA-OPTIMIZED: Use materialized hadith_numbers arrays for instant intersection
+        query = """
+            MATCH (n:Person {id: $narrator_id})
+            MATCH (related:Person {id: $related_id})
+
+            // Use materialized arrays if available, fall back to path traversal
+            WITH n, related,
+                 CASE WHEN n.hadith_numbers IS NOT NULL
+                      THEN n.hadith_numbers
+                      ELSE [] END as n_hadiths,
+                 CASE WHEN related.hadith_numbers IS NOT NULL
+                      THEN related.hadith_numbers
+                      ELSE [] END as related_hadiths
+
+            // Find intersection
+            WITH [x IN n_hadiths WHERE x IN related_hadiths] as shared_hadiths
+            UNWIND shared_hadiths as hn
+
+            MATCH (h:Hadith {number: hn})-[:HAS_CHAIN]->(first:Person)
+            RETURN h.number as number,
+                   h.matn as matn,
+                   h.full_text as full_text,
+                   first.fame as first_narrator
+            ORDER BY h.number
+            LIMIT 500
+        """
+        result = await db.execute_read(
+            query, narrator_id=narrator_id, related_id=related_narrator_id
+        )
+    else:
+        # ULTRA-OPTIMIZED: Use materialized hadith_numbers if available
+        query = """
+            MATCH (n:Person {id: $narrator_id})
+
+            // Use materialized array if available
+            WITH n,
+                 CASE WHEN n.hadith_numbers IS NOT NULL
+                      THEN n.hadith_numbers
+                      ELSE [] END as hadith_list
+
+            UNWIND hadith_list as hn
+            MATCH (h:Hadith {number: hn})-[:HAS_CHAIN]->(first:Person)
+            RETURN h.number as number,
+                   h.matn as matn,
+                   h.full_text as full_text,
+                   first.fame as first_narrator
+            ORDER BY h.number
+            LIMIT 500
+        """
+        result = await db.execute_read(query, narrator_id=narrator_id)
+
+    return result
