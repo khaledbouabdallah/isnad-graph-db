@@ -117,6 +117,35 @@ def load_to_neo4j(
     driver.close()
     print(f"✅ Loaded {len(hadiths)} hadiths to Neo4j")
 
+    # Materialize hadith_numbers on Person nodes
+    print("\n📊 Materializing hadith numbers on narrator nodes...")
+    materialize_hadith_numbers(neo4j_uri, neo4j_user, neo4j_password)
+
+
+def materialize_hadith_numbers(
+    neo4j_uri: str = "bolt://localhost:7687",
+    neo4j_user: str = "neo4j",
+    neo4j_password: str = "password123",
+):
+    """Compute and store hadith_numbers array on each Person node for fast lookups."""
+    driver = GraphDatabase.driver(neo4j_uri, auth=(neo4j_user, neo4j_password))
+
+    with driver.session() as session:
+        # Materialize hadith numbers for all narrators
+        # Collect all hadith numbers from NARRATED_FROM relationships connected to each person
+        query = """
+            MATCH (p:Person)
+            OPTIONAL MATCH (p)-[r:NARRATED_FROM]-()
+            WITH p, COLLECT(DISTINCT r.hadith) as hadith_list
+            SET p.hadith_numbers = [h IN hadith_list WHERE h IS NOT NULL]
+            RETURN count(p) as total
+        """
+        result = session.run(query)
+        total = result.single()["total"]
+        print(f"  ✓ Materialized hadith numbers for {total} narrators")
+
+    driver.close()
+
 
 def reset_database(
     neo4j_uri: str = "bolt://localhost:7687",
