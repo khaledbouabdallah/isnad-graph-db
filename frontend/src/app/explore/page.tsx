@@ -7,7 +7,7 @@ import { Search } from "lucide-react";
 import { getGraphOverview } from "@/lib/api";
 import { Navbar, GraphLegend, GraphControls, NarratorSidePanel, HadithSidePanel, EdgeHadithsModal } from "@/components/ui";
 import { matchesRankFilter } from "@/lib/graph-config";
-import type { GraphData, Narrator, Hadith } from "@/lib/types";
+import type { GraphData, Narrator, Hadith, HadithChainData, Chain } from "@/lib/types";
 import type { NetworkGraphRef } from "@/components/graph/NetworkGraph";
 
 const NetworkGraph = dynamic(
@@ -43,7 +43,7 @@ export default function ExplorePage() {
   // Hadith mode state
   const [selectedHadithNumber, setSelectedHadithNumber] = useState<number | null>(null);
   const [isHadithPanelOpen, setIsHadithPanelOpen] = useState(false);
-  const [hadithChain, setHadithChain] = useState<string[] | null>(null);
+  const [hadithChainData, setHadithChainData] = useState<HadithChainData | null>(null);
 
   // Edge hadiths modal state
   const [edgeSourceId, setEdgeSourceId] = useState<string | null>(null);
@@ -124,7 +124,7 @@ export default function ExplorePage() {
     setSpecificEdge(null);
     setIsHadithPanelOpen(false);
     setSelectedHadithNumber(null);
-    setHadithChain(null);
+    setHadithChainData(null);
 
     // Reset graph to explore mode
     if (graphRef.current) {
@@ -132,7 +132,7 @@ export default function ExplorePage() {
     }
   }, []);
 
-  // Handle narrator selection - enters detail mode - enters detail mode
+  // Handle narrator selection - enters detail mode
   const handleNarratorClick = useCallback((id: number | string) => {
     const narratorId = typeof id === 'string' ? parseInt(id, 10) : id;
 
@@ -142,6 +142,7 @@ export default function ExplorePage() {
     setSpecificEdge(null); // Reset specific edge when selecting new narrator
     setIsHadithPanelOpen(false); // Close hadith panel if open
     setSelectedHadithNumber(null);
+    setHadithChainData(null); // Clear hadith chain when switching to narrator mode
     setSearchQuery("");
     setNarratorSearchResults([]);
     setHadithSearchResults([]);
@@ -157,22 +158,55 @@ export default function ExplorePage() {
     // Enter hadith mode
     setSelectedHadithNumber(hadithNumber);
     setIsHadithPanelOpen(true);
+    setSpecificEdge(null); // Clear any specific edge highlighting
     setSearchQuery("");
     setNarratorSearchResults([]);
     setHadithSearchResults([]);
 
-    // Fetch hadith chain to highlight in graph
+    // Fetch hadith chains to highlight in graph
     try {
       const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000/api";
-      const response = await fetch(`${API_BASE}/hadiths/${hadithNumber}/chain`);
+      const response = await fetch(`${API_BASE}/hadiths/${hadithNumber}/chains`);
       if (response.ok) {
-        const chain = await response.json();
-        const chainIds = chain.map((narrator: { id: string }) => narrator.id);
-        setHadithChain(chainIds);
+        const chains: Chain[] = await response.json();
+        if (chains.length > 0) {
+          // Find primary chain
+          const primaryChainData = chains.find(c => c.chain_type === "primary") || chains[0];
+          const primaryChain = primaryChainData.narrators.map(n => String(n.id));
+
+          // Create a set of primary chain IDs for finding connection points
+          const primarySet = new Set(primaryChain);
+
+          // Process variant and note chains
+          const variantChains = chains
+            .filter(c => c.chain_type !== "primary")
+            .map(chain => {
+              const narrators = chain.narrators.map(n => String(n.id));
+              // Find where this chain connects to primary (last narrator that's in primary)
+              let connectsAt: string | null = null;
+              for (let i = narrators.length - 1; i >= 0; i--) {
+                if (primarySet.has(narrators[i])) {
+                  connectsAt = narrators[i];
+                  break;
+                }
+              }
+              return {
+                chain_type: chain.chain_type as "variant" | "note",
+                narrators,
+                connectsAt,
+                marker: chain.marker || null,
+              };
+            });
+
+          setHadithChainData({
+            primaryChain,
+            variantChains,
+          });
+        }
       }
     } catch (err) {
       console.error("Failed to fetch hadith chain:", err);
-      setHadithChain(null);
+      setHadithChainData(null);
     }
     // Note: Narrator panel can stay open, allowing navigation from narrator -> hadith
   }, []);
@@ -372,7 +406,7 @@ export default function ExplorePage() {
               onBackgroundClick={handleBackgroundClick}
               showEdges={showEdges}
               specificEdge={specificEdge}
-              hadithChain={hadithChain}
+              hadithChainData={hadithChainData}
               className="h-full"
             />
           ) : (

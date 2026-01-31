@@ -7,14 +7,37 @@ import Link from "next/link";
 
 interface IsnadChainProps {
   chain: ChainNarrator[];
+  chainType?: "primary" | "variant" | "note";
+  marker?: string | null;
   className?: string;
 }
+
+const CHAIN_TYPE_STYLES = {
+  primary: {
+    label: "الطريق الأساسي",
+    bgClass: "bg-emerald-100 dark:bg-emerald-900/30",
+    textClass: "text-emerald-700 dark:text-emerald-300",
+    borderClass: "border-emerald-500",
+  },
+  variant: {
+    label: "طريق آخر",
+    bgClass: "bg-blue-100 dark:bg-blue-900/30",
+    textClass: "text-blue-700 dark:text-blue-300",
+    borderClass: "border-blue-500",
+  },
+  note: {
+    label: "ملاحظة",
+    bgClass: "bg-amber-100 dark:bg-amber-900/30",
+    textClass: "text-amber-700 dark:text-amber-300",
+    borderClass: "border-amber-500",
+  },
+};
 
 /**
  * Vertical chain visualization showing the hadith transmission chain
  * with clear flow direction from first narrator to last (companion)
  */
-export default function IsnadChain({ chain, className = "" }: IsnadChainProps) {
+export default function IsnadChain({ chain, chainType, marker, className = "" }: IsnadChainProps) {
   if (!chain || chain.length === 0) {
     return (
       <div className="text-center py-8 text-muted-foreground">
@@ -23,8 +46,28 @@ export default function IsnadChain({ chain, className = "" }: IsnadChainProps) {
     );
   }
 
+  const typeStyle = chainType ? CHAIN_TYPE_STYLES[chainType] : null;
+
   return (
     <div className={`relative ${className}`}>
+      {/* Chain type header */}
+      {typeStyle && chainType !== "primary" && (
+        <motion.div
+          initial={{ opacity: 0, y: -10 }}
+          animate={{ opacity: 1, y: 0 }}
+          className={`mb-4 p-3 rounded-lg border ${typeStyle.bgClass} ${typeStyle.borderClass}`}
+        >
+          <div className={`text-sm font-semibold ${typeStyle.textClass}`}>
+            {typeStyle.label}
+          </div>
+          {marker && (
+            <div className={`text-xs mt-1 ${typeStyle.textClass} opacity-80`}>
+              {marker}
+            </div>
+          )}
+        </motion.div>
+      )}
+
       {/* Chain container */}
       <div className="flex flex-col items-center">
         {chain.map((narrator, index) => {

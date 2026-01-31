@@ -5,7 +5,7 @@ import Graph from "graphology";
 import Sigma from "sigma";
 import { EdgeCurvedArrowProgram } from "@sigma/edge-curve";
 import forceAtlas2 from "graphology-layout-forceatlas2";
-import type { GraphData } from "@/lib/types";
+import type { GraphData, HadithChainData } from "@/lib/types";
 import {
   SIGMA_SETTINGS,
   LAYOUT_SETTINGS,
@@ -72,7 +72,7 @@ interface NetworkGraphProps {
   onBackgroundClick?: () => void;
   showEdges?: boolean;
   specificEdge?: { source: string; target: string } | null;
-  hadithChain?: string[] | null; // Array of node IDs in the hadith chain
+  hadithChainData?: HadithChainData | null; // Primary and variant chains for hadith view
   className?: string;
 }
 
@@ -85,14 +85,22 @@ export interface NetworkGraphRef {
   resetToExploreMode: () => void;
 }
 
+// Chain colors for visualization
+const CHAIN_COLORS = {
+  primary: "#10b981", // Emerald green
+  variant: "#3b82f6", // Blue
+  note: "#f59e0b", // Amber
+  connection: "#a855f7", // Purple for connection points
+};
+
 const NetworkGraph = forwardRef<NetworkGraphRef, NetworkGraphProps>(
-  function NetworkGraph({ data, onNodeClick, onEdgeClick, onBackgroundClick, showEdges = false, specificEdge = null, hadithChain = null, className = "" }, ref) {
+  function NetworkGraph({ data, onNodeClick, onEdgeClick, onBackgroundClick, showEdges = false, specificEdge = null, hadithChainData = null, className = "" }, ref) {
     const containerRef = useRef<HTMLDivElement>(null);
     const sigmaRef = useRef<Sigma | null>(null);
     const hoveredNodeRef = useRef<string | null>(null);
     const clickedNodeRef = useRef<string | null>(null);
     const specificEdgeRef = useRef(specificEdge);
-    const hadithChainRef = useRef(hadithChain);
+    const hadithChainDataRef = useRef(hadithChainData);
     const showEdgesRef = useRef(showEdges);
     const isInitializedRef = useRef(false);
     const animationFrameRef = useRef<number | null>(null);
@@ -125,10 +133,10 @@ const NetworkGraph = forwardRef<NetworkGraphRef, NetworkGraphProps>(
       }
     }, [specificEdge]);
 
-    // Keep hadithChainRef in sync
+    // Keep hadithChainDataRef in sync
     useEffect(() => {
-      hadithChainRef.current = hadithChain;
-      setIsDetailMode(!!hadithChain || !!specificEdge || !!clickedNodeRef.current);
+      hadithChainDataRef.current = hadithChainData;
+      setIsDetailMode(!!hadithChainData || !!specificEdge || !!clickedNodeRef.current);
       if (isInitializedRef.current && sigmaRef.current) {
         try {
           sigmaRef.current.refresh();
@@ -136,7 +144,97 @@ const NetworkGraph = forwardRef<NetworkGraphRef, NetworkGraphProps>(
           // Sigma not ready yet, ignore
         }
       }
-    }, [hadithChain, specificEdge]);
+    }, [hadithChainData, specificEdge]);
+
+    // Apply hierarchical top-down layout when hadith chain is active
+    useEffect(() => {
+      const sigma = sigmaRef.current;
+      const chainData = hadithChainData;
+
+      if (!sigma || !isInitializedRef.current || !chainData || chainData.primaryChain.length === 0) return;
+
+      const graph = sigma.getGraph();
+      const primaryChain = chainData.primaryChain;
+
+      // Calculate center position based on existing primary chain nodes
+      let sumX = 0;
+      let validNodes = 0;
+      primaryChain.forEach((nodeId) => {
+        if (graph.hasNode(nodeId)) {
+          sumX += graph.getNodeAttribute(nodeId, "x") as number;
+          validNodes++;
+        }
+      });
+      const centerX = validNodes > 0 ? sumX / validNodes : 50;
+
+      // Position primary chain nodes in a vertical line (top-down hierarchy)
+      const verticalSpacing = 80;
+      const startY = 0;
+
+      primaryChain.forEach((nodeId, index) => {
+        if (graph.hasNode(nodeId)) {
+          graph.setNodeAttribute(nodeId, "x", centerX);
+          graph.setNodeAttribute(nodeId, "y", startY + index * verticalSpacing);
+        }
+      });
+
+      // Position variant chain nodes branching off from their connection points
+      const horizontalOffset = 120; // Distance to the side for variant chains
+      const primarySet = new Set(primaryChain);
+      let variantCount = 0; // Track actual variant chains (not notes)
+      let noteCount = 0; // Track note chains
+
+      chainData.variantChains.forEach((variant) => {
+        const connectsAtIndex = variant.connectsAt
+          ? primaryChain.indexOf(variant.connectsAt)
+          : primaryChain.length - 1;
+
+        const connectionY = connectsAtIndex >= 0
+          ? startY + connectsAtIndex * verticalSpacing
+          : startY + (primaryChain.length - 1) * verticalSpacing;
+
+        // Find narrators unique to this variant (not in primary)
+        const uniqueNarrators = variant.narrators.filter(n => !primarySet.has(n));
+
+        if (variant.chain_type === "note") {
+          // NOTE chains: arrange horizontally as parallel narrators
+          // Fan out from the connection point
+          const noteSpacing = 100;
+          uniqueNarrators.forEach((nodeId, idx) => {
+            if (graph.hasNode(nodeId)) {
+              // Position in a horizontal line above the connection point
+              const totalWidth = (uniqueNarrators.length - 1) * noteSpacing;
+              const startXNote = centerX - totalWidth / 2;
+              graph.setNodeAttribute(nodeId, "x", startXNote + idx * noteSpacing);
+              graph.setNodeAttribute(nodeId, "y", connectionY - verticalSpacing);
+            }
+          });
+          noteCount++;
+        } else {
+          // VARIANT chains: arrange vertically branching off to the side
+          const side = (variantCount % 2 === 0) ? 1 : -1; // Alternate left/right
+          const xOffset = centerX + (side * horizontalOffset * (Math.floor(variantCount / 2) + 1));
+
+          uniqueNarrators.forEach((nodeId, idx) => {
+            if (graph.hasNode(nodeId)) {
+              // Position above the connection point in a vertical line
+              const yPos = connectionY - (uniqueNarrators.length - idx) * verticalSpacing;
+              graph.setNodeAttribute(nodeId, "x", xOffset);
+              graph.setNodeAttribute(nodeId, "y", yPos);
+            }
+          });
+          variantCount++;
+        }
+      });
+
+      // Animate camera to fit all chains
+      setTimeout(() => {
+        const camera = sigma.getCamera();
+        camera.animatedReset({ duration: 400 });
+      }, 50);
+
+      sigma.refresh();
+    }, [hadithChainData]);
 
     // Expose imperative methods for zoom/camera control
     useImperativeHandle(ref, () => ({
@@ -360,15 +458,43 @@ const NetworkGraph = forwardRef<NetworkGraphRef, NetworkGraphProps>(
           const hovered = hoveredNodeRef.current;
           const clicked = clickedNodeRef.current;
           const specificEdge = specificEdgeRef.current;
-          const hadithChain = hadithChainRef.current;
+          const chainData = hadithChainDataRef.current;
 
-          // Priority 1: Hadith chain highlighting
-          if (hadithChain && hadithChain.length > 0) {
-            if (hadithChain.includes(node)) {
+          // Priority 1: Hadith chain highlighting (supports multiple chains)
+          if (chainData && chainData.primaryChain.length > 0) {
+            const inPrimary = chainData.primaryChain.includes(node);
+
+            // Check if node is in any variant chain
+            let inVariant = false;
+            let variantType: "variant" | "note" | null = null;
+            let isConnectionPoint = false;
+
+            for (const variant of chainData.variantChains) {
+              if (variant.narrators.includes(node)) {
+                inVariant = true;
+                variantType = variant.chain_type;
+              }
+              if (variant.connectsAt === node) {
+                isConnectionPoint = true;
+              }
+            }
+
+            if (inPrimary || inVariant) {
               res.highlighted = true;
               res.size = (res.size as number) * NODE_STYLES.glowMultiplier;
               res.zIndex = 2;
-              res.color = "#10b981"; // Emerald green for hadith chain
+
+              // Color based on chain membership
+              if (isConnectionPoint) {
+                res.color = CHAIN_COLORS.connection; // Purple for connection points
+              } else if (inPrimary && !inVariant) {
+                res.color = CHAIN_COLORS.primary; // Green for primary only
+              } else if (inVariant && !inPrimary) {
+                res.color = variantType === "note" ? CHAIN_COLORS.note : CHAIN_COLORS.variant;
+              } else {
+                // In both primary and variant (shared node)
+                res.color = CHAIN_COLORS.connection;
+              }
             } else {
               res.color = NODE_STYLES.faded;
               res.label = "";
@@ -425,27 +551,96 @@ const NetworkGraph = forwardRef<NetworkGraphRef, NetworkGraphProps>(
           const hovered = hoveredNodeRef.current;
           const clicked = clickedNodeRef.current;
           const specificEdge = specificEdgeRef.current;
-          const hadithChain = hadithChainRef.current;
+          const chainData = hadithChainDataRef.current;
 
-          // Priority 1: Hadith chain highlighting - show edges between chain nodes
-          if (hadithChain && hadithChain.length > 1) {
+          // Priority 1: Hadith chain highlighting - show edges for all chains
+          if (chainData && chainData.primaryChain.length > 1) {
             const [source, target] = graph.extremities(edge);
-            const sourceIndex = hadithChain.indexOf(source);
-            const targetIndex = hadithChain.indexOf(target);
+            const primarySet = new Set(chainData.primaryChain);
 
-            // Check if this edge connects consecutive nodes in the chain
-            const isChainEdge =
-              (sourceIndex >= 0 && targetIndex >= 0 && Math.abs(sourceIndex - targetIndex) === 1);
+            // Check if edge is in primary chain (consecutive nodes with correct direction)
+            // Edge direction: source (student) -> target (teacher)
+            // Chain order: [first_narrator, ..., sahabi] where each narrates FROM the next
+            // So source should be at index i, target at index i+1
+            const sourceIdxPrimary = chainData.primaryChain.indexOf(source);
+            const targetIdxPrimary = chainData.primaryChain.indexOf(target);
+            const isPrimaryEdge =
+              sourceIdxPrimary >= 0 &&
+              targetIdxPrimary >= 0 &&
+              targetIdxPrimary - sourceIdxPrimary === 1; // Direction matters!
 
-            if (isChainEdge) {
+            if (isPrimaryEdge) {
               res.hidden = false;
-              res.color = "#10b981"; // Emerald green for hadith chain
+              res.color = CHAIN_COLORS.primary;
               const baseSize = 3 + Math.min(edgeData.weight * 0.3, 5);
               res.size = baseSize;
               res.zIndex = 3;
-            } else {
-              res.hidden = true;
+              return res;
             }
+
+            // Check if edge is in any variant chain
+            for (const variant of chainData.variantChains) {
+              // For NOTE chains: they often represent parallel narrators, not sequential
+              // Only show edges from note narrators TO the connection point
+              if (variant.chain_type === "note" && variant.connectsAt) {
+                const isNoteToConnectionEdge =
+                  variant.narrators.includes(source) &&
+                  target === variant.connectsAt &&
+                  source !== variant.connectsAt;
+
+                if (isNoteToConnectionEdge) {
+                  res.hidden = false;
+                  res.color = CHAIN_COLORS.note;
+                  const baseSize = 2 + Math.min(edgeData.weight * 0.3, 4);
+                  res.size = baseSize;
+                  res.zIndex = 2;
+                  return res;
+                }
+                continue; // Skip sequential check for notes
+              }
+
+              // For VARIANT chains: show edges between UNIQUE narrators (not in primary)
+              // plus the connection to primary
+              const uniqueNarrators = variant.narrators.filter(n => !primarySet.has(n));
+              const sourceIdxUnique = uniqueNarrators.indexOf(source);
+              const targetIdxUnique = uniqueNarrators.indexOf(target);
+
+              // Edge between consecutive unique narrators (direction matters!)
+              const isUniqueVariantEdge =
+                sourceIdxUnique >= 0 &&
+                targetIdxUnique >= 0 &&
+                targetIdxUnique - sourceIdxUnique === 1;
+
+              if (isUniqueVariantEdge) {
+                res.hidden = false;
+                res.color = CHAIN_COLORS.variant;
+                const baseSize = 2.5 + Math.min(edgeData.weight * 0.3, 4);
+                res.size = baseSize;
+                res.zIndex = 2;
+                return res;
+              }
+
+              // Edge connecting last unique narrator to the connection point
+              // Direction: lastUniqueNarrator narrates FROM connectsAt
+              // So edge should be: source=lastUniqueNarrator, target=connectsAt
+              if (variant.connectsAt && uniqueNarrators.length > 0) {
+                const lastUniqueNarrator = uniqueNarrators[uniqueNarrators.length - 1];
+                const isConnectionEdge =
+                  source === lastUniqueNarrator && target === variant.connectsAt;
+
+                if (isConnectionEdge) {
+                  res.hidden = false;
+                  res.color = CHAIN_COLORS.connection;
+                  const baseSize = 2 + Math.min(edgeData.weight * 0.3, 4);
+                  res.size = baseSize;
+                  res.zIndex = 2;
+                  return res;
+                }
+              }
+            }
+
+            // Not part of any chain - hide
+            res.hidden = true;
             return res;
           }
 
@@ -507,12 +702,26 @@ const NetworkGraph = forwardRef<NetworkGraphRef, NetworkGraphProps>(
         },
       });
 
+      // Helper to check if node is in any chain
+      const isNodeInChains = (node: string, chainData: HadithChainData | null): boolean => {
+        if (!chainData) return false;
+        if (chainData.primaryChain.includes(node)) return true;
+        return chainData.variantChains.some(v => v.narrators.includes(node));
+      };
+
       // Event handlers
       sigma.on("enterNode", ({ node }) => {
-        // Don't hover faded nodes when in specific edge mode
         const specificEdge = specificEdgeRef.current;
+        const chainData = hadithChainDataRef.current;
+
+        // Don't hover faded nodes when in specific edge mode
         if (specificEdge && node !== specificEdge.source && node !== specificEdge.target) {
           return; // Ignore hover on faded nodes
+        }
+
+        // Don't hover faded nodes when in hadith chain mode
+        if (chainData && chainData.primaryChain.length > 0 && !isNodeInChains(node, chainData)) {
+          return; // Ignore hover on nodes not in any chain
         }
 
         hoveredNodeRef.current = node;
@@ -527,10 +736,24 @@ const NetworkGraph = forwardRef<NetworkGraphRef, NetworkGraphProps>(
       });
 
       sigma.on("clickNode", ({ node }) => {
-        // Don't allow clicking faded nodes when in specific edge mode
         const specificEdge = specificEdgeRef.current;
+        const chainData = hadithChainDataRef.current;
+
+        // Don't allow clicking faded nodes when in specific edge mode
         if (specificEdge && node !== specificEdge.source && node !== specificEdge.target) {
           return; // Ignore clicks on faded nodes
+        }
+
+        // Don't allow clicking faded nodes when in hadith chain mode
+        if (chainData && chainData.primaryChain.length > 0 && !isNodeInChains(node, chainData)) {
+          return; // Ignore clicks on nodes not in any chain
+        }
+
+        // In hadith chain mode, just call the handler without setting clicked state
+        // This prevents normal highlight behavior from triggering
+        if (chainData && chainData.primaryChain.length > 0) {
+          handleNodeClick(node);
+          return;
         }
 
         // Toggle clicked state: if clicking the same node, unselect it

@@ -110,4 +110,3 @@ for hadith in hadiths:
 - `src/loader.py`: Add compound_isnad flag
 - `backend/app/models/hadith.py`: Add is_compound field
 - `backend/app/routers/hadiths.py`: Return flag in API
-- `frontend/src/app/hadith/[id]/page.tsx`: Display warning

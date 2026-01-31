@@ -42,7 +42,7 @@ async def test_list_hadiths_pagination(client):
 
 @pytest.mark.anyio
 async def test_get_hadith_detail(client):
-    """Test getting hadith details."""
+    """Test getting hadith details with chains."""
     response = await client.get("/api/hadiths/1")
 
     assert response.status_code == 200
@@ -50,23 +50,55 @@ async def test_get_hadith_detail(client):
 
     assert "number" in data
     assert "matn" in data
+    assert "chains" in data
+    assert "is_compound_isnad" in data
     assert data["number"] == 1
+
+    # Chains should be a list
+    assert isinstance(data["chains"], list)
+    if data["chains"]:
+        chain = data["chains"][0]
+        assert "chain_id" in chain
+        assert "chain_type" in chain
+        assert "narrators" in chain
 
 
 @pytest.mark.anyio
-async def test_get_hadith_chain(client):
-    """Test getting hadith transmission chain."""
-    response = await client.get("/api/hadiths/1/chain")
+async def test_get_hadith_chains(client):
+    """Test getting hadith transmission chains."""
+    response = await client.get("/api/hadiths/1/chains")
 
     assert response.status_code == 200
     data = response.json()
 
-    # Chain should be a list of narrators
+    # Should be a list of chains
     assert isinstance(data, list)
     if data:
-        narrator = data[0]
-        assert "id" in narrator
-        assert "name" in narrator
+        chain = data[0]
+        assert "chain_id" in chain
+        assert "chain_type" in chain
+        assert "narrators" in chain
+        if chain["narrators"]:
+            narrator = chain["narrators"][0]
+            assert "id" in narrator
+            assert "name" in narrator
+
+
+@pytest.mark.anyio
+async def test_get_compound_hadith(client):
+    """Test getting a compound isnad hadith with multiple chains."""
+    response = await client.get("/api/hadiths/995")
+
+    assert response.status_code == 200
+    data = response.json()
+
+    assert data["number"] == 995
+    assert data["is_compound_isnad"] == True
+    assert len(data["chains"]) > 1
+
+    # Check chain types
+    chain_types = [c["chain_type"] for c in data["chains"]]
+    assert "primary" in chain_types
 
 
 @pytest.mark.anyio

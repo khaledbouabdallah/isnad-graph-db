@@ -68,7 +68,8 @@ def load_to_neo4j(
                     h.chapter = $chapter,
                     h.matn = $matn,
                     h.full_text = $full_text,
-                    h.normalized_matn = $normalized_matn
+                    h.normalized_matn = $normalized_matn,
+                    h.is_compound_isnad = $is_compound
                 """,
                 number=hadith["hadith_number"],
                 book=hadith.get("book", ""),
@@ -76,43 +77,70 @@ def load_to_neo4j(
                 matn=hadith["matn"],
                 full_text=hadith["full_text"],
                 normalized_matn=hadith.get("normalized_matn", hadith["matn"]),
+                is_compound=hadith.get("is_compound_isnad", False),
             )
 
-            chain = hadith["chain"]
+            # Process multiple chains if available, otherwise fall back to legacy single chain
+            chains = hadith.get("chains", [])
+            if not chains:
+                # Legacy format: single chain
+                chain = hadith.get("chain", [])
+                if chain:
+                    chains = [{
+                        "chain_type": "primary",
+                        "narrators": chain,
+                        "marker": None
+                    }]
 
-            if not chain:
+            if not chains:
                 continue
 
-            # Create NARRATED_FROM edges between consecutive narrators
-            for i in range(len(chain) - 1):
-                narrator1_id = chain[i]["id"]
-                narrator2_id = chain[i + 1]["id"]
+            # Process each chain
+            for chain_idx, chain_data in enumerate(chains):
+                chain = chain_data["narrators"]
+                chain_type = chain_data["chain_type"]
+                chain_id = f"{hadith['hadith_number']}_chain_{chain_idx}"
 
-                # Skip if same ID (prevent self-loop)
-                if narrator1_id == narrator2_id:
+                if not chain:
                     continue
 
+                # Create NARRATED_FROM edges between consecutive narrators in this chain
+                for i in range(len(chain) - 1):
+                    narrator1_id = chain[i]["id"]
+                    narrator2_id = chain[i + 1]["id"]
+
+                    # Skip if same ID (prevent self-loop)
+                    if narrator1_id == narrator2_id:
+                        continue
+
+                    session.run(
+                        """
+                        MATCH (n1:Person {id: $id1})
+                        MATCH (n2:Person {id: $id2})
+                        MERGE (n1)-[r:NARRATED_FROM {hadith: $hadith_num, chain_id: $chain_id}]->(n2)
+                        SET r.chain_type = $chain_type
+                        """,
+                        id1=narrator1_id,
+                        id2=narrator2_id,
+                        hadith_num=hadith["hadith_number"],
+                        chain_id=chain_id,
+                        chain_type=chain_type,
+                    )
+
+                # Link hadith to FIRST narrator in each chain
+                # (for primary chains, this is the main link; for variants, it's an alternate path)
                 session.run(
                     """
-                    MATCH (n1:Person {id: $id1})
-                    MATCH (n2:Person {id: $id2})
-                    MERGE (n1)-[:NARRATED_FROM {hadith: $hadith_num}]->(n2)
+                    MATCH (h:Hadith {number: $hadith_num})
+                    MATCH (n:Person {id: $narrator_id})
+                    MERGE (h)-[r:HAS_CHAIN {chain_id: $chain_id}]->(n)
+                    SET r.chain_type = $chain_type
                     """,
-                    id1=narrator1_id,
-                    id2=narrator2_id,
                     hadith_num=hadith["hadith_number"],
+                    narrator_id=chain[0]["id"],
+                    chain_id=chain_id,
+                    chain_type=chain_type,
                 )
-
-            # Link hadith to FIRST narrator in chain
-            session.run(
-                """
-                MATCH (h:Hadith {number: $hadith_num})
-                MATCH (n:Person {id: $narrator_id})
-                MERGE (h)-[:HAS_CHAIN]->(n)
-                """,
-                hadith_num=hadith["hadith_number"],
-                narrator_id=chain[0]["id"],
-            )
 
     driver.close()
     print(f"✅ Loaded {len(hadiths)} hadiths to Neo4j")

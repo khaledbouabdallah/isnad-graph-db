@@ -8,6 +8,149 @@ import re
 from typing import Dict, Optional
 
 
+def extract_multiple_chains(hadith_text_element):
+    """
+    Extract multiple chains from hadith text that may contain compound isnads.
+
+    Args:
+        hadith_text_element: BeautifulSoup element containing the hadith text
+
+    Returns:
+        List of chains, where each chain is:
+        {
+            "chain_type": "primary" | "variant" | "note",
+            "narrators": [{"name": str, "id": str}, ...],
+            "marker": str | None  # The marker that introduced this variant (if any)
+        }
+    """
+    # Compound isnad markers - order matters (check specific before general)
+    MARKERS = [
+        'وَلَمْ يَذْكُرْ',  # "and did not mention" - variation note
+        'وَرَوَاهُ',        # "and narrated it" - variant chain
+        'وَتَابَعَهُ',      # "and followed by" - variant chain
+        'تَابَعَهُ',       # "followed by" - variant chain (check after وَتَابَعَهُ)
+        'وَرَوَى',         # "and narrated" - variant chain
+        'وَقَالَ',         # "and said" - can introduce variants
+    ]
+
+    html_str = str(hadith_text_element)
+
+    # Check if any markers exist in the text
+    has_any_marker = any(marker in html_str for marker in MARKERS)
+
+    # Find matn tag position (if exists)
+    matn_tag = hadith_text_element.find("a", class_="matn")
+    matn_end_pos = None
+
+    if matn_tag:
+        matn_str = str(matn_tag)
+        matn_pos = html_str.find(matn_str)
+        matn_end_pos = matn_pos + len(matn_str)
+
+    # Determine primary chain end position
+    if has_any_marker:
+        # Find first marker position
+        first_marker_pos = len(html_str)
+        for marker in MARKERS:
+            pos = html_str.find(marker)
+            if pos != -1:
+                first_marker_pos = min(first_marker_pos, pos)
+
+        # Primary chain ends at first marker (variants can appear before or after matn)
+        primary_end = first_marker_pos
+    elif matn_end_pos:
+        # No markers, so primary chain is everything up to matn end
+        primary_end = matn_end_pos
+    else:
+        # No markers, no matn - entire text is primary chain
+        primary_end = len(html_str)
+
+    # Extract primary chain
+    primary_html = html_str[:primary_end]
+    primary_soup = BeautifulSoup(primary_html, 'html.parser')
+    primary_links = primary_soup.find_all("a", class_="rawy")
+
+    # Deduplicate primary chain
+    seen_ids = set()
+    primary_narrators = []
+    for link in primary_links:
+        narrator_id = link.get("id")
+        if narrator_id and narrator_id not in seen_ids:
+            seen_ids.add(narrator_id)
+            primary_narrators.append({
+                "name": link.text.strip(),
+                "id": narrator_id
+            })
+
+    chains = [{
+        "chain_type": "primary",
+        "narrators": primary_narrators,
+        "marker": None
+    }]
+
+    # Extract variant chains from text after primary
+    remaining_html = html_str[primary_end:]
+
+    # Find all marker positions in remaining text
+    marker_positions = []
+    for marker in MARKERS:
+        pos = 0
+        while True:
+            pos = remaining_html.find(marker, pos)
+            if pos == -1:
+                break
+            marker_positions.append((pos, marker))
+            pos += len(marker)
+
+    # Sort by position
+    marker_positions.sort(key=lambda x: x[0])
+
+    # Extract chains between markers
+    for i, (pos, marker) in enumerate(marker_positions):
+        # Find end of this segment (next marker or end of string)
+        if i + 1 < len(marker_positions):
+            segment_end = marker_positions[i + 1][0]
+        else:
+            segment_end = len(remaining_html)
+
+        # Extract segment
+        segment_start = pos + len(marker)
+        segment_html = remaining_html[segment_start:segment_end]
+        segment_soup = BeautifulSoup(segment_html, 'html.parser')
+        variant_links = segment_soup.find_all("a", class_="rawy")
+
+        # Deduplicate and collect narrators
+        variant_ids = set()
+        variant_narrators = []
+        for link in variant_links:
+            narrator_id = link.get("id")
+            if narrator_id and narrator_id not in variant_ids:
+                variant_ids.add(narrator_id)
+                variant_narrators.append({
+                    "name": link.text.strip(),
+                    "id": narrator_id
+                })
+
+        # Determine chain type based on marker
+        if 'يَذْكُرْ' in marker:
+            chain_type = "note"
+        elif 'قَالَ' in marker:
+            # وَقَالَ can be a variant or just a comment, check if it has narrators
+            chain_type = "variant" if variant_narrators else "note"
+        else:
+            chain_type = "variant"
+
+        # Only add if we found narrators
+        if variant_narrators:
+            chains.append({
+                "chain_type": chain_type,
+                "narrators": variant_narrators,
+                "marker": marker
+            })
+
+    return chains
+
+
 def extract_years_from_fame(fame: str | None) -> tuple[str, int | None, int | None]:
     """
     Extract cleaned fame, birth year, and death year from fame string.
@@ -92,7 +235,11 @@ def scrape_hadith(hadith_num: int) -> Optional[Dict]:
     if not hadith_text:
         return None
 
-    # Extract narrator links from chain
+    # Extract multiple chains (handles compound isnads)
+    chains = extract_multiple_chains(hadith_text)
+
+    # Legacy: flatten to single chain for backward compatibility
+    # (concatenate all narrators from all chains)
     narrator_links = hadith_text.find_all("a", class_="rawy")
     chain = []
     for link in narrator_links:
@@ -134,12 +281,17 @@ def scrape_hadith(hadith_num: int) -> Optional[Dict]:
     # Full text (including isnad)
     full_text = hadith_text.get_text(strip=True)
 
+    # Determine if this is a compound isnad
+    is_compound = len(chains) > 1
+
     return {
         "hadith_number": hadith_num,
         "book": book_name,
         "chapter": chapter_name,
         "url": url,
-        "chain": chain,
+        "chain": chain,  # Legacy: all narrators flattened
+        "chains": chains,  # New: multiple chains with metadata
+        "is_compound_isnad": is_compound,
         "narrator_details": narrator_details,
         "matn": matn,
         "full_text": full_text,

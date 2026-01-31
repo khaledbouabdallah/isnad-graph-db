@@ -266,7 +266,8 @@ async def get_narrator_hadiths(
             WITH [x IN n_hadiths WHERE x IN related_hadiths] as shared_hadiths
             UNWIND shared_hadiths as hn
 
-            MATCH (h:Hadith {number: hn})-[:HAS_CHAIN]->(first:Person)
+            MATCH (h:Hadith {number: hn})-[hc:HAS_CHAIN]->(first:Person)
+            WHERE hc.chain_type = 'primary'
             RETURN h.number as number,
                    h.matn as matn,
                    h.full_text as full_text,
@@ -289,7 +290,8 @@ async def get_narrator_hadiths(
                       ELSE [] END as hadith_list
 
             UNWIND hadith_list as hn
-            MATCH (h:Hadith {number: hn})-[:HAS_CHAIN]->(first:Person)
+            MATCH (h:Hadith {number: hn})-[hc:HAS_CHAIN]->(first:Person)
+            WHERE hc.chain_type = 'primary'
             RETURN h.number as number,
                    h.matn as matn,
                    h.full_text as full_text,

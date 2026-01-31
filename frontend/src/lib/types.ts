@@ -7,11 +7,19 @@ export interface ChainNarrator {
   position: number;
 }
 
+export interface Chain {
+  chain_id: string;
+  chain_type: "primary" | "variant" | "note";
+  narrators: ChainNarrator[];
+  marker?: string | null;
+}
+
 export interface Hadith {
   number: number;
   matn: string | null;
   chain_length: number | null;
   first_narrator: string | null;
+  is_compound_isnad: boolean;
 }
 
 export interface HadithDetail {
@@ -19,7 +27,8 @@ export interface HadithDetail {
   matn: string | null;
   full_text: string | null;
   url: string | null;
-  chain: ChainNarrator[];
+  is_compound_isnad: boolean;
+  chains: Chain[];
 }
 
 // Narrator types
@@ -54,6 +63,17 @@ export interface NarratorDetail {
   teachers: NarratorConnection[];
   students: NarratorConnection[];
   hadith_numbers: number[];
+}
+
+// Hadith chain visualization data (for graph)
+export interface HadithChainData {
+  primaryChain: string[]; // Node IDs in order
+  variantChains: {
+    chain_type: "variant" | "note";
+    narrators: string[]; // Node IDs
+    connectsAt: string | null; // Node ID where it connects to primary
+    marker: string | null;
+  }[];
 }
 
 // Graph types
