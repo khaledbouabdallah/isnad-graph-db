@@ -17,22 +17,39 @@ def normalize_arabic(text: str) -> str:
 
 @router.get("/hadiths", response_model=list[Hadith])
 async def search_hadiths(
-    q: str = Query(..., min_length=2, description="Search query for hadith text"),
+    q: str = Query(..., min_length=1, description="Search query for hadith text or number"),
     limit: int = Query(20, ge=1, le=50),
 ):
-    """Search hadiths by matn (text content) using normalized text."""
-    normalized_q = normalize_arabic(q)
-    query = """
-        MATCH (h:Hadith)
-        WHERE h.normalized_matn CONTAINS $q OR h.matn CONTAINS $q
-        OPTIONAL MATCH (h)-[:HAS_CHAIN]->(first:Person)
-        RETURN h.number as number,
-               h.matn as matn,
-               first.name as first_narrator
-        ORDER BY h.number
-        LIMIT $limit
-    """
-    results = await db.execute_read(query, q=normalized_q, limit=limit)
+    """Search hadiths by matn (text content) or by number."""
+    # Check if query is a number (hadith number search)
+    if q.isdigit():
+        hadith_num = int(q)
+        query = """
+            MATCH (h:Hadith)
+            WHERE h.number = $num OR toString(h.number) STARTS WITH $q
+            OPTIONAL MATCH (h)-[:HAS_CHAIN]->(first:Person)
+            RETURN h.number as number,
+                   h.matn as matn,
+                   h.is_compound_isnad as is_compound_isnad,
+                   first.name as first_narrator
+            ORDER BY h.number
+            LIMIT $limit
+        """
+        results = await db.execute_read(query, num=hadith_num, q=q, limit=limit)
+    else:
+        normalized_q = normalize_arabic(q)
+        query = """
+            MATCH (h:Hadith)
+            WHERE h.normalized_matn CONTAINS $q OR h.matn CONTAINS $q
+            OPTIONAL MATCH (h)-[:HAS_CHAIN]->(first:Person)
+            RETURN h.number as number,
+                   h.matn as matn,
+                   h.is_compound_isnad as is_compound_isnad,
+                   first.name as first_narrator
+            ORDER BY h.number
+            LIMIT $limit
+        """
+        results = await db.execute_read(query, q=normalized_q, limit=limit)
     return [Hadith(**r, chain_length=None) for r in results]
 
 

@@ -44,6 +44,7 @@ export default function ExplorePage() {
   const [selectedHadithNumber, setSelectedHadithNumber] = useState<number | null>(null);
   const [isHadithPanelOpen, setIsHadithPanelOpen] = useState(false);
   const [hadithChainData, setHadithChainData] = useState<HadithChainData | null>(null);
+  const [missingChainNodes, setMissingChainNodes] = useState<number>(0); // Count of chain nodes not in current graph
 
   // Edge hadiths modal state
   const [edgeSourceId, setEdgeSourceId] = useState<string | null>(null);
@@ -79,7 +80,11 @@ export default function ExplorePage() {
 
   // Search narrators or hadiths based on search type
   useEffect(() => {
-    if (!searchQuery || searchQuery.length < 2) {
+    // For hadith search, allow single digit (number search)
+    // For narrator search, require at least 2 characters
+    const minLength = searchType === "hadith" && /^\d+$/.test(searchQuery) ? 1 : 2;
+
+    if (!searchQuery || searchQuery.length < minLength) {
       setNarratorSearchResults([]);
       setHadithSearchResults([]);
       return;
@@ -163,44 +168,20 @@ export default function ExplorePage() {
     setNarratorSearchResults([]);
     setHadithSearchResults([]);
 
-    // Fetch hadith chains to highlight in graph
+    // Fetch hadith chains to highlight in graph (primary chain only)
     try {
       const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000/api";
       const response = await fetch(`${API_BASE}/hadiths/${hadithNumber}/chains`);
       if (response.ok) {
         const chains: Chain[] = await response.json();
         if (chains.length > 0) {
-          // Find primary chain
+          // Find and use only primary chain
           const primaryChainData = chains.find(c => c.chain_type === "primary") || chains[0];
           const primaryChain = primaryChainData.narrators.map(n => String(n.id));
 
-          // Create a set of primary chain IDs for finding connection points
-          const primarySet = new Set(primaryChain);
-
-          // Process variant and note chains
-          const variantChains = chains
-            .filter(c => c.chain_type !== "primary")
-            .map(chain => {
-              const narrators = chain.narrators.map(n => String(n.id));
-              // Find where this chain connects to primary (last narrator that's in primary)
-              let connectsAt: string | null = null;
-              for (let i = narrators.length - 1; i >= 0; i--) {
-                if (primarySet.has(narrators[i])) {
-                  connectsAt = narrators[i];
-                  break;
-                }
-              }
-              return {
-                chain_type: chain.chain_type as "variant" | "note",
-                narrators,
-                connectsAt,
-                marker: chain.marker || null,
-              };
-            });
-
           setHadithChainData({
             primaryChain,
-            variantChains,
+            variantChains: [], // Don't highlight variants - only show primary
           });
         }
       }
@@ -265,6 +246,21 @@ export default function ExplorePage() {
       edges: filteredEdges,
     };
   }, [fullData, nodeCount, selectedRank]);
+
+  // Track missing chain nodes when in hadith mode
+  useEffect(() => {
+    if (!hadithChainData || !filteredData) {
+      setMissingChainNodes(0);
+      return;
+    }
+
+    const visibleNodeIds = new Set(filteredData.nodes.map((n) => n.id));
+    const missingCount = hadithChainData.primaryChain.filter(
+      (nodeId) => !visibleNodeIds.has(nodeId)
+    ).length;
+
+    setMissingChainNodes(missingCount);
+  }, [hadithChainData, filteredData]);
 
   return (
     <div className="min-h-screen bg-background">
@@ -435,6 +431,7 @@ export default function ExplorePage() {
             isOpen={isHadithPanelOpen}
             onClose={resetToExploreMode}
             onNarratorClick={handleNarratorClick}
+            missingChainNodes={missingChainNodes}
           />
 
           {/* Edge Hadiths Modal */}

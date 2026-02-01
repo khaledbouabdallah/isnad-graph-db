@@ -153,44 +153,44 @@ export default function IsnadChain({ chain, chainType, marker, className = "" }:
                 </div>
               </Link>
 
-              {/* Connector arrow to next narrator */}
+              {/* Connector showing narration direction */}
               {!isLast && (
                 <div className="flex flex-col items-center py-2">
-                  {/* Vertical line */}
-                  <motion.div
-                    initial={{ scaleY: 0 }}
-                    animate={{ scaleY: 1 }}
+                  {/* "روى عن" label - shows this narrator received from the next */}
+                  <motion.span
+                    initial={{ opacity: 0 }}
+                    animate={{ opacity: 1 }}
                     transition={{ delay: index * 0.08 + 0.15, duration: 0.2 }}
-                    className="w-0.5 h-6 bg-gradient-to-b from-border to-muted-foreground/50"
-                    style={{ transformOrigin: "top" }}
-                  />
-                  {/* Arrow down */}
+                    className="text-xs text-muted-foreground mb-1"
+                  >
+                    روى عن
+                  </motion.span>
+                  {/* Arrow pointing UP - knowledge flows from below (teacher) to above (student) */}
                   <motion.div
-                    initial={{ opacity: 0, y: -5 }}
+                    initial={{ opacity: 0, y: 5 }}
                     animate={{ opacity: 1, y: 0 }}
                     transition={{ delay: index * 0.08 + 0.2, duration: 0.2 }}
                   >
                     <svg
-                      className="w-4 h-4 text-muted-foreground"
+                      className="w-4 h-4 text-primary"
                       fill="currentColor"
                       viewBox="0 0 20 20"
                     >
                       <path
                         fillRule="evenodd"
-                        d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z"
+                        d="M14.707 12.707a1 1 0 01-1.414 0L10 9.414l-3.293 3.293a1 1 0 01-1.414-1.414l4-4a1 1 0 011.414 0l4 4a1 1 0 010 1.414z"
                         clipRule="evenodd"
                       />
                     </svg>
                   </motion.div>
-                  {/* "روى عن" label */}
-                  <motion.span
-                    initial={{ opacity: 0 }}
-                    animate={{ opacity: 1 }}
+                  {/* Vertical line */}
+                  <motion.div
+                    initial={{ scaleY: 0 }}
+                    animate={{ scaleY: 1 }}
                     transition={{ delay: index * 0.08 + 0.25, duration: 0.2 }}
-                    className="text-xs text-muted-foreground mt-1"
-                  >
-                    روى عن
-                  </motion.span>
+                    className="w-0.5 h-6 bg-gradient-to-t from-border to-primary/50"
+                    style={{ transformOrigin: "bottom" }}
+                  />
                 </div>
               )}
             </motion.div>

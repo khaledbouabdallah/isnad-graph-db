@@ -22,6 +22,11 @@ export interface Hadith {
   is_compound_isnad: boolean;
 }
 
+// Extended graph node with rank info for hadith mode coloring
+export interface GraphNodeWithRank extends GraphNode {
+  rank: string | null;
+}
+
 export interface HadithDetail {
   number: number;
   matn: string | null;

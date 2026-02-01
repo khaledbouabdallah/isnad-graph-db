@@ -362,21 +362,37 @@ const NetworkGraph = forwardRef<NetworkGraphRef, NetworkGraphProps>(
       // Create graphology instance
       const graph = new Graph();
 
-      // Add nodes with warm color palette
+      // Seeded random for deterministic layout based on node ID
+      const seededRandom = (seed: number) => {
+        const x = Math.sin(seed) * 10000;
+        return x - Math.floor(x);
+      };
+
+      // Add nodes with warm color palette and deterministic positions
       data.nodes.forEach((node) => {
+        // Use node ID as seed for deterministic position
+        const idNum = parseInt(node.id, 10) || node.id.split('').reduce((a, c) => a + c.charCodeAt(0), 0);
+        const x = seededRandom(idNum * 1.1) * 100;
+        const y = seededRandom(idNum * 2.3) * 100;
+
         graph.addNode(node.id, {
           label: node.label || "",
           size: Math.min(Math.max(node.size, NODE_STYLES.minSize), NODE_STYLES.maxSize),
           color: node.color || "#78716C",
-          x: Math.random() * 100,
-          y: Math.random() * 100,
+          originalColor: node.color || "#78716C", // Store original color for hadith mode
+          rank: node.rank || null, // Store rank for hadith mode coloring
+          x,
+          y,
         });
       });
 
-      // Add edges - use type for curved rendering, weight determines thickness
+      // Add edges - REVERSED direction: teacher → student (source was student, target was teacher)
+      // Original data: student NARRATED_FROM teacher (student → teacher)
+      // We want: teacher NARRATED_TO student (teacher → student)
       data.edges.forEach((edge) => {
         if (graph.hasNode(edge.source) && graph.hasNode(edge.target)) {
-          graph.addEdge(edge.source, edge.target, {
+          // Swap source and target to reverse direction
+          graph.addEdge(edge.target, edge.source, {
             weight: edge.weight,
             size: 0.8 + Math.min(edge.weight * 0.5, 3), // Thicker for more transmissions
             color: EDGE_STYLES.default,
@@ -393,7 +409,7 @@ const NetworkGraph = forwardRef<NetworkGraphRef, NetworkGraphProps>(
         ...SIGMA_SETTINGS,
         // Custom hover rendering - no white background box
         defaultDrawNodeHover: drawHover,
-        // Don't render default label for hovered nodes
+        // Custom label rendering - avoid duplicate labels
         defaultDrawNodeLabel: (context, data, settings) => {
           // Skip label rendering for hovered node (drawHover handles it)
           if (data.isHovered) {
@@ -403,9 +419,12 @@ const NetworkGraph = forwardRef<NetworkGraphRef, NetworkGraphProps>(
           if (!data.label) return;
 
           const size = data.size;
+          const chainData = hadithChainDataRef.current;
+          const isInHadithMode = chainData && chainData.primaryChain.length > 0;
 
-          // If this is a highlighted neighbor, draw prominent label
-          if (data.highlighted) {
+          // If this is a highlighted neighbor (NOT in hadith chain mode), draw prominent label
+          // In hadith mode, use simple labels to avoid clutter
+          if (data.highlighted && !isInHadithMode) {
             const fontSize = (settings.labelSize || 12) + 2;
             const font = settings.labelFont || "sans-serif";
 
@@ -438,7 +457,7 @@ const NetworkGraph = forwardRef<NetworkGraphRef, NetworkGraphProps>(
             context.textAlign = "left";
             context.fillText(data.label, labelX, labelY + fontSize / 3);
           } else {
-            // Regular label for non-highlighted nodes
+            // Regular label for non-highlighted nodes OR hadith mode chain nodes
             context.fillStyle = settings.labelColor?.color || "#fef3c7";
             context.font = `${settings.labelWeight} ${settings.labelSize}px ${settings.labelFont}`;
             context.fillText(data.label, data.x + size + 3, data.y + settings.labelSize / 3);
@@ -466,16 +485,10 @@ const NetworkGraph = forwardRef<NetworkGraphRef, NetworkGraphProps>(
 
             // Check if node is in any variant chain
             let inVariant = false;
-            let variantType: "variant" | "note" | null = null;
-            let isConnectionPoint = false;
 
             for (const variant of chainData.variantChains) {
               if (variant.narrators.includes(node)) {
                 inVariant = true;
-                variantType = variant.chain_type;
-              }
-              if (variant.connectsAt === node) {
-                isConnectionPoint = true;
               }
             }
 
@@ -484,17 +497,13 @@ const NetworkGraph = forwardRef<NetworkGraphRef, NetworkGraphProps>(
               res.size = (res.size as number) * NODE_STYLES.glowMultiplier;
               res.zIndex = 2;
 
-              // Color based on chain membership
-              if (isConnectionPoint) {
-                res.color = CHAIN_COLORS.connection; // Purple for connection points
-              } else if (inPrimary && !inVariant) {
-                res.color = CHAIN_COLORS.primary; // Green for primary only
-              } else if (inVariant && !inPrimary) {
-                res.color = variantType === "note" ? CHAIN_COLORS.note : CHAIN_COLORS.variant;
-              } else {
-                // In both primary and variant (shared node)
-                res.color = CHAIN_COLORS.connection;
+              // Keep original rank-based color instead of chain-type color
+              // The originalColor is set when the node was created
+              const originalColor = nodeData.originalColor as string | undefined;
+              if (originalColor) {
+                res.color = originalColor;
               }
+              // Otherwise keep the current color (already rank-based)
             } else {
               res.color = NODE_STYLES.faded;
               res.label = "";
@@ -558,16 +567,17 @@ const NetworkGraph = forwardRef<NetworkGraphRef, NetworkGraphProps>(
             const [source, target] = graph.extremities(edge);
             const primarySet = new Set(chainData.primaryChain);
 
-            // Check if edge is in primary chain (consecutive nodes with correct direction)
-            // Edge direction: source (student) -> target (teacher)
-            // Chain order: [first_narrator, ..., sahabi] where each narrates FROM the next
-            // So source should be at index i, target at index i+1
+            // Check if edge is in primary chain (consecutive nodes with REVERSED direction)
+            // Edge direction is now: teacher → student (reversed from original)
+            // Chain order: [first_narrator(student), ..., sahabi(teacher)]
+            // With reversed edges: source=teacher (index i+1), target=student (index i)
+            // So we need: sourceIdx - targetIdx === 1
             const sourceIdxPrimary = chainData.primaryChain.indexOf(source);
             const targetIdxPrimary = chainData.primaryChain.indexOf(target);
             const isPrimaryEdge =
               sourceIdxPrimary >= 0 &&
               targetIdxPrimary >= 0 &&
-              targetIdxPrimary - sourceIdxPrimary === 1; // Direction matters!
+              sourceIdxPrimary - targetIdxPrimary === 1; // Teacher → Student
 
             if (isPrimaryEdge) {
               res.hidden = false;
@@ -581,14 +591,14 @@ const NetworkGraph = forwardRef<NetworkGraphRef, NetworkGraphProps>(
             // Check if edge is in any variant chain
             for (const variant of chainData.variantChains) {
               // For NOTE chains: they often represent parallel narrators, not sequential
-              // Only show edges from note narrators TO the connection point
+              // With reversed direction: connection point (teacher) → note narrator (student)
               if (variant.chain_type === "note" && variant.connectsAt) {
-                const isNoteToConnectionEdge =
-                  variant.narrators.includes(source) &&
-                  target === variant.connectsAt &&
-                  source !== variant.connectsAt;
+                const isNoteEdge =
+                  source === variant.connectsAt &&
+                  variant.narrators.includes(target) &&
+                  target !== variant.connectsAt;
 
-                if (isNoteToConnectionEdge) {
+                if (isNoteEdge) {
                   res.hidden = false;
                   res.color = CHAIN_COLORS.note;
                   const baseSize = 2 + Math.min(edgeData.weight * 0.3, 4);
@@ -605,11 +615,11 @@ const NetworkGraph = forwardRef<NetworkGraphRef, NetworkGraphProps>(
               const sourceIdxUnique = uniqueNarrators.indexOf(source);
               const targetIdxUnique = uniqueNarrators.indexOf(target);
 
-              // Edge between consecutive unique narrators (direction matters!)
+              // Edge between consecutive unique narrators (teacher → student)
               const isUniqueVariantEdge =
                 sourceIdxUnique >= 0 &&
                 targetIdxUnique >= 0 &&
-                targetIdxUnique - sourceIdxUnique === 1;
+                sourceIdxUnique - targetIdxUnique === 1;
 
               if (isUniqueVariantEdge) {
                 res.hidden = false;
@@ -620,13 +630,12 @@ const NetworkGraph = forwardRef<NetworkGraphRef, NetworkGraphProps>(
                 return res;
               }
 
-              // Edge connecting last unique narrator to the connection point
-              // Direction: lastUniqueNarrator narrates FROM connectsAt
-              // So edge should be: source=lastUniqueNarrator, target=connectsAt
+              // Edge connecting connection point (teacher) to first unique narrator (student)
+              // Direction: connectsAt → firstUniqueNarrator
               if (variant.connectsAt && uniqueNarrators.length > 0) {
-                const lastUniqueNarrator = uniqueNarrators[uniqueNarrators.length - 1];
+                const firstUniqueNarrator = uniqueNarrators[uniqueNarrators.length - 1];
                 const isConnectionEdge =
-                  source === lastUniqueNarrator && target === variant.connectsAt;
+                  source === variant.connectsAt && target === firstUniqueNarrator;
 
                 if (isConnectionEdge) {
                   res.hidden = false;
@@ -675,13 +684,15 @@ const NetworkGraph = forwardRef<NetworkGraphRef, NetworkGraphProps>(
             const [source, target] = graph.extremities(edge);
             if (source === activeNode || target === activeNode) {
               // Connected to active node - show with directional coloring
+              // Edge direction is now teacher → student
               res.hidden = false;
 
-              // Blue for outgoing (narrated from), Green for incoming (narrated to)
               if (source === activeNode) {
-                res.color = EDGE_STYLES.narratedFrom; // Outgoing: active → other (narrated from)
+                // Active is teacher, pointing to students
+                res.color = EDGE_STYLES.narratedTo; // Green: taught to students
               } else {
-                res.color = EDGE_STYLES.narratedTo; // Incoming: other → active (narrated to)
+                // Active is student, receiving from teachers
+                res.color = EDGE_STYLES.narratedFrom; // Blue: learned from teachers
               }
 
               // Size based on hadith count - thicker edges for more hadiths
