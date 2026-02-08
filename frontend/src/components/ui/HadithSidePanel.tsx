@@ -76,21 +76,101 @@ export function HadithSidePanel({
     }
     const highlights: HighlightItem[] = [];
 
+    // Helper: Remove Arabic diacritics (tashkeel) for flexible matching
+    const removeDiacritics = (text: string): string => {
+      // Arabic diacritics Unicode range: \u064B-\u065F, \u0670
+      return text.replace(/[\u064B-\u065F\u0670]/g, '');
+    };
+
+    // Helper: Find narrator name in text, handling partial matches and diacritics
+    const findNarratorInText = (
+      name: string | null,
+      fame: string | null,
+      text: string
+    ): { start: number; end: number; matchedText: string } | null => {
+      if (!name) return null;
+
+      // Try exact match first
+      let pos = text.indexOf(name);
+      if (pos !== -1) {
+        return { start: pos, end: pos + name.length, matchedText: name };
+      }
+
+      // Try matching without diacritics
+      const cleanName = removeDiacritics(name);
+      const cleanText = removeDiacritics(text);
+      pos = cleanText.indexOf(cleanName);
+      if (pos !== -1) {
+        // Find the corresponding position in original text
+        // Count characters up to pos in clean text, map to original
+        let originalPos = 0;
+        let cleanPos = 0;
+        while (cleanPos < pos && originalPos < text.length) {
+          const char = text[originalPos];
+          if (!/[\u064B-\u065F\u0670]/.test(char)) {
+            cleanPos++;
+          }
+          originalPos++;
+        }
+        // Find end position
+        let endOriginalPos = originalPos;
+        let endCleanPos = cleanPos;
+        while (endCleanPos < pos + cleanName.length && endOriginalPos < text.length) {
+          const char = text[endOriginalPos];
+          if (!/[\u064B-\u065F\u0670]/.test(char)) {
+            endCleanPos++;
+          }
+          endOriginalPos++;
+        }
+        const matchedText = text.slice(originalPos, endOriginalPos);
+        return { start: originalPos, end: endOriginalPos, matchedText };
+      }
+
+      // Try with fame (often has full name without diacritics)
+      if (fame) {
+        const fameParts = fame.split(/\s+/).slice(0, 2).join(' '); // First 2 words of fame
+        if (fameParts.length >= 3) {
+          const cleanFame = removeDiacritics(fameParts);
+          pos = cleanText.indexOf(cleanFame);
+          if (pos !== -1) {
+            // Map back to original text position
+            let originalPos = 0;
+            let cleanPos = 0;
+            while (cleanPos < pos && originalPos < text.length) {
+              if (!/[\u064B-\u065F\u0670]/.test(text[originalPos])) cleanPos++;
+              originalPos++;
+            }
+            let endOriginalPos = originalPos;
+            let endCleanPos = cleanPos;
+            while (endCleanPos < pos + cleanFame.length && endOriginalPos < text.length) {
+              if (!/[\u064B-\u065F\u0670]/.test(text[endOriginalPos])) endCleanPos++;
+              endOriginalPos++;
+            }
+            return { start: originalPos, end: endOriginalPos, matchedText: text.slice(originalPos, endOriginalPos) };
+          }
+        }
+      }
+
+      return null;
+    };
+
     // Add narrator names to highlights
     if (hadith.chains) {
+      const usedRanges = new Set<string>(); // Track used positions to avoid duplicates
+
       hadith.chains.forEach((chain) => {
         chain.narrators.forEach((narrator) => {
-          const name = narrator.name;
-          if (name) {
-            let pos = 0;
-            while ((pos = fullText.indexOf(name, pos)) !== -1) {
+          const match = findNarratorInText(narrator.name, narrator.fame, fullText);
+          if (match) {
+            const rangeKey = `${match.start}-${match.end}`;
+            if (!usedRanges.has(rangeKey)) {
+              usedRanges.add(rangeKey);
               highlights.push({
-                start: pos,
-                end: pos + name.length,
+                start: match.start,
+                end: match.end,
                 type: "narrator",
-                text: name,
+                text: match.matchedText,
               });
-              pos += name.length;
             }
           }
         });
